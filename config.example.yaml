@@ -1,0 +1,76 @@
+storage:
+  database_file: "data/autodl-helper.db"
+
+interactive:
+  max_workers: 6   # interactive 页面内部异步任务池并发数
+
+accounts:
+  - name: "main"
+    enabled: true
+    authorization: "Bearer <your-autodl-token>"
+    autodl_phone: ""
+    autodl_password: ""
+    cache_file: ".cache/main-auth.json"
+    cache_max_age_seconds: 86400
+    lightweight_mode: "normal"   # off / normal / aggressive
+    runtime_auth_revalidate_seconds: 0
+    force_refresh_min_interval_seconds: 0
+    auth_failure_backoff_seconds: 0
+
+notifications:
+  pushplus:
+    enabled: false
+    token: "<your-pushplus-token>"
+  serverchan:
+    enabled: false
+    token: "<your-serverchan-sendkey>"
+  email:
+    enabled: false
+    smtp_host: "smtp.example.com"
+    smtp_port: 465
+    username: "you@example.com"
+    password: "<your-smtp-password>"
+    to:
+      - "you@example.com"
+
+tasks:
+  keeper:
+    enabled: true
+    shutdown_release_after_hours: 360   # 最长保留时长
+    keeper_trigger_before_hours: 6      # 距离释放多久开始接管
+    interval_minutes: 60                # Keeper 检查频率
+    power_on_wait_seconds: 60
+    power_off_wait_seconds: 5
+    start_cooldown_minutes: 60
+    stop_cooldown_minutes: 360
+    fallback_to_status_at: true
+
+  scheduled_start:
+    enabled: true
+    poll_interval_seconds: 5
+    jobs:
+      # 例 1：固定实例
+      - instance_id: "<your-instance-id>"
+        name: "daily-fixed-instance"
+        target_time: "14:00"
+        advance_hours: 2
+        timezone: "Asia/Shanghai"
+
+      # 例 2：按筛选条件抢机
+      - name: "daily-selector-job"
+        target_time: "20:00"
+        advance_hours: 1
+        timezone: "Asia/Shanghai"
+        selector:
+          regions:
+            - "<region-a>"
+            - "<region-b>"
+          gpu_model: "RTX 3080 Ti"
+          gpu_count: 1
+          charge_types:
+            - "payg"
+        priority:
+          - region: "<preferred-region-1>"
+            machine_alias: "<preferred-machine-1>"
+          - region: "<preferred-region-2>"
+            machine_alias: "<preferred-machine-2>"

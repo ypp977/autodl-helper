@@ -1,0 +1,36 @@
+auth:
+  authorization: ""
+  autodl_phone: ""
+  autodl_password: ""
+interactive:
+  max_workers: 6
+notifications:
+  pushplus:
+    enabled: false
+    token: ""
+  serverchan:
+    enabled: false
+    token: ""
+  email:
+    enabled: false
+    smtp_host: "smtp.qq.com"
+    smtp_port: 465
+    username: ""
+    password: ""
+    to: []
+tasks:
+  keeper:
+    enabled: false
+    min_day: 4
+    interval_minutes: 60
+    power_on_wait_seconds: 60
+    power_off_wait_seconds: 5
+  scheduled_start:
+    enabled: true
+    poll_interval_seconds: 5
+    jobs:
+      - instance_id: "fbda11ad52-d9008683"
+        name: "test-2080ti"
+        target_time: "23:59"
+        advance_hours: 2
+        timezone: "Asia/Shanghai"
