@@ -64,17 +64,17 @@ git clone https://github.com/yangpengpeng/autodl-helper.git
 cd autodl-helper
 ```
 
-### 2. Create venv
+### 2. Use local Python
 
 ```bash
-python3 -m venv .venv
-source .venv/bin/activate
+python --version
+pip --version
 ```
 
 ### 3. Install dependencies
 
 ```bash
-pip install -r requirements.txt
+python -m pip install -r requirements.txt
 playwright install chromium
 ```
 
@@ -94,7 +94,7 @@ python main.py interactive --config config.yaml
 也可以作为本地包安装：
 
 ```bash
-pip install -e .[dev]
+python -m pip install -e .[dev]
 autodl-helper --help
 ```
 
@@ -222,13 +222,13 @@ config.test.yaml    # test config
 Run tests:
 
 ```bash
-./.venv/bin/python -m pytest -q
+python -m pytest -q
 ```
 
 Compile check:
 
 ```bash
-./.venv/bin/python -m py_compile $(find autodl_helper -name '*.py')
+python -m py_compile $(find autodl_helper -name '*.py')
 ```
 
 贡献说明见：

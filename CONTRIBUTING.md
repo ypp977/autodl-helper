@@ -5,9 +5,7 @@
 ```bash
 git clone https://github.com/yangpengpeng/autodl-helper.git
 cd autodl-helper
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
+python -m pip install -r requirements-dev.txt
 playwright install chromium
 ```
 
@@ -16,19 +14,19 @@ playwright install chromium
 Run tests:
 
 ```bash
-./.venv/bin/python -m pytest -q
+python -m pytest -q
 ```
 
 Run the interactive console:
 
 ```bash
-./.venv/bin/python main.py interactive --config config.yaml
+python main.py interactive --config config.yaml
 ```
 
 Run the daemon locally:
 
 ```bash
-./.venv/bin/python main.py run-daemon --config config.yaml
+python main.py run-daemon --config config.yaml
 ```
 
 ## Config and local state
@@ -52,7 +50,7 @@ Use:
 
 Before opening a PR:
 
-1. Run `./.venv/bin/python -m pytest -q`
+1. Run `python -m pytest -q`
 2. Verify no secrets or account identifiers were added
 3. Update `README.md` if CLI behavior changed
 4. Update `CHANGELOG.md` for user-visible changes

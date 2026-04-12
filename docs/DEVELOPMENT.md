@@ -5,16 +5,15 @@
 ## Local setup
 
 ```bash
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -r requirements-dev.txt
+python --version
+python -m pip install -r requirements-dev.txt
 playwright install chromium
 ```
 
 如果你更偏向包管理方式，也可以：
 
 ```bash
-pip install -e .[dev]
+python -m pip install -e .[dev]
 ```
 
 ## Common development commands
@@ -22,19 +21,19 @@ pip install -e .[dev]
 ### Run tests
 
 ```bash
-./.venv/bin/python -m pytest -q
+python -m pytest -q
 ```
 
 ### Compile check
 
 ```bash
-./.venv/bin/python -m py_compile $(find autodl_helper -name '*.py')
+python -m py_compile $(find autodl_helper -name '*.py')
 ```
 
 ### Lint
 
 ```bash
-./.venv/bin/python -m ruff check .
+python -m ruff check .
 ```
 
 当前 lint 只接入一层**保守门禁**，主要用于发现：
@@ -50,21 +49,21 @@ pip install -e .[dev]
 ### Interactive
 
 ```bash
-./.venv/bin/python main.py interactive --config config.yaml
+python main.py interactive --config config.yaml
 ```
 
 ### Daemon
 
 ```bash
-./.venv/bin/python main.py run-daemon --config config.yaml
+python main.py run-daemon --config config.yaml
 ```
 
 ### macOS LaunchAgent
 
 ```bash
-./.venv/bin/python main.py service-install --config config.yaml
-./.venv/bin/python main.py service-start --config config.yaml
-./.venv/bin/python main.py service-status --config config.yaml
+python main.py service-install --config config.yaml
+python main.py service-start --config config.yaml
+python main.py service-status --config config.yaml
 ```
 
 ## Suggested workflow
