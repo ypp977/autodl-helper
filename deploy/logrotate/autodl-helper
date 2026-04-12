@@ -1,0 +1,9 @@
+/opt/autodl-helper/logs/*.log {
+  daily
+  rotate 7
+  missingok
+  notifempty
+  compress
+  delaycompress
+  copytruncate
+}

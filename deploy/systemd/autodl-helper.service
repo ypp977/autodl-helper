@@ -1,0 +1,16 @@
+[Unit]
+Description=autodl-helper
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/autodl-helper
+EnvironmentFile=/opt/autodl-helper/.env
+ExecStart=/opt/autodl-helper/.venv/bin/python /opt/autodl-helper/main.py run-all --config /opt/autodl-helper/config.yaml --state-file /opt/autodl-helper/data/state.json --lock-file /opt/autodl-helper/data/autodl-helper.lock
+Restart=always
+RestartSec=10
+TimeoutStopSec=15
+
+[Install]
+WantedBy=multi-user.target
