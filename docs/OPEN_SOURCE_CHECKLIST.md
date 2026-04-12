@@ -12,7 +12,6 @@
   - [ ] `.autodl-helper-auth.json`
   - [ ] `.autodl-helper-state.json`
   - [ ] `.autodl-helper.lock`
-- [ ] Check screenshots in `images/` for private account data
 - [ ] Check git history for leaked tokens or phone numbers
 
 ## Project hygiene
@@ -28,5 +27,4 @@
 
 - [ ] Add CI for tests on pull requests
 - [ ] Add issue templates
-- [ ] Add screenshot redaction for docs
 - [ ] Publish a first tagged release

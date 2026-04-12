@@ -79,6 +79,6 @@ If you need stricter guarantees for your environment, review the source directly
 
 Before pushing public history:
 
-1. inspect screenshots in `images/`
-2. inspect git history for leaked tokens or phone numbers
+1. inspect git history for leaked tokens or phone numbers
+2. inspect README / docs examples for private account data
 3. rotate credentials if you suspect they were ever committed

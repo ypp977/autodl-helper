@@ -277,9 +277,7 @@ Current top-level layout:
 autodl_helper/   # package source
 tests/           # pytest suite
 docs/            # user/developer docs
-deploy/          # deployment/system integration examples
 scripts/         # helper scripts
-images/          # screenshots/assets (must be privacy-checked)
 ```
 
 Supporting files:
@@ -317,4 +315,3 @@ Not required immediately, but good medium-term cleanup targets:
 1. split `interactive_app.py` by page domain
 2. introduce dedicated formatting/helpers module for human-readable terminal values
 3. add linting (`ruff`) and dev dependency separation
-4. document deployment under `deploy/` more clearly

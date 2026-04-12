@@ -1,59 +1,26 @@
 # Contributing
 
-## Development environment
+欢迎提交 issue 和 pull request。
 
-```bash
-git clone https://github.com/yangpengpeng/autodl-helper.git
-cd autodl-helper
-python -m pip install -r requirements-dev.txt
-playwright install chromium
-```
-
-## Local commands
-
-Run tests:
-
-```bash
-python -m pytest -q
-```
-
-Run the interactive console:
-
-```bash
-python main.py interactive --config config.yaml
-```
-
-Run the daemon locally:
-
-```bash
-python main.py run-daemon --config config.yaml
-```
-
-## Config and local state
-
-Do not commit local runtime files. These stay local:
-
-- `.env`
-- `config.yaml`
-- `.autodl-helper-auth.json`
-- `.autodl-helper-state.json`
-- `.autodl-helper.lock`
-- `data/`
-- `logs/`
-
-Use:
-
-- `config.example.yaml` as the public template
-- `config.test.yaml` for tests
-
-## Pull request checklist
-
-Before opening a PR:
+## Before you open a PR
 
 1. Run `python -m pytest -q`
-2. Verify no secrets or account identifiers were added
-3. Update `README.md` if CLI behavior changed
-4. Update `CHANGELOG.md` for user-visible changes
+2. Run `python -m ruff check .`
+3. Verify no secrets or account identifiers were added
+4. Update `README.md` if CLI behavior changed
+5. Update `CHANGELOG.md` for user-visible changes
+
+## Development setup
+
+详细开发说明见：
+
+- `docs/DEVELOPMENT.md`
+- `docs/TROUBLESHOOTING.md`
+
+公共示例配置见：
+
+- `config.example.yaml`
+- `config.test.yaml`
 
 ## Scope guidance
 

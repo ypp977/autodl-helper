@@ -10,7 +10,6 @@ All notable changes to this project will be documented in this file.
 - Added `run-all`, `run-keeper`, `run-scheduled-start`, `watch-instance`, and `healthcheck` commands.
 - Added selector-based scheduled-start jobs with exact filters for region, GPU model, GPU count, and charge type.
 - Added explicit priority ordering for multi-candidate selector jobs.
-- Added deploy templates under `deploy/systemd/` and `deploy/logrotate/`.
 
 ### Changed
 
@@ -40,7 +39,6 @@ All notable changes to this project will be documented in this file.
 - Renamed the project from `autodl-keeper` to `autodl-helper` in docs and packaging-facing surfaces.
 - Switched CLI usage to subcommands instead of flat flags.
 - Updated example configuration to show real multi-job scheduled-start usage.
-- Updated Docker/systemd/cron examples to use the new `run` subcommand.
 
 ### Fixed
 
