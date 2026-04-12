@@ -1,0 +1,8 @@
+apscheduler==3.11.2
+playwright==1.58.0
+pydantic==2.12.5
+pytz==2025.2
+python-dotenv==1.2.2
+PyYAML==6.0.2
+requests==2.33.1
+urllib3==2.6.3
