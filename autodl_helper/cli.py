@@ -828,3 +828,7 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     parser.print_help(sys.stderr)
     return 2
+
+
+if __name__ == '__main__':
+    raise SystemExit(main())

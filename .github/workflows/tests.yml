@@ -14,6 +14,9 @@ concurrency:
   group: tests-${{ github.ref }}
   cancel-in-progress: true
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
 jobs:
   lint:
     runs-on: ubuntu-latest
@@ -67,7 +70,7 @@ jobs:
 
       - name: CLI smoke test
         run: |
-          python -m autodl_helper.cli --help
+          autodl-helper --help
           python main.py --help
           python main.py validate-config --config config.example.yaml
           python main.py validate-config --config config.test.yaml
