@@ -17,7 +17,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  IMAGE_NAME: yangpengpeng/autodl-helper
+  IMAGE_NAME: ypp977/autodl-helper
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
 
 jobs:

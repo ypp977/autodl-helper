@@ -10,7 +10,7 @@ readme = "README.md"
 requires-python = ">=3.11"
 license = { file = "LICENSE" }
 authors = [
-  { name = "yangpengpeng" }
+  { name = "ypp977" }
 ]
 keywords = ["autodl", "cli", "daemon", "scheduler", "sqlite", "playwright"]
 classifiers = [
@@ -43,9 +43,9 @@ dev = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/yangpengpeng/autodl-helper"
-Repository = "https://github.com/yangpengpeng/autodl-helper"
-Issues = "https://github.com/yangpengpeng/autodl-helper/issues"
+Homepage = "https://github.com/ypp977/autodl-helper"
+Repository = "https://github.com/ypp977/autodl-helper"
+Issues = "https://github.com/ypp977/autodl-helper/issues"
 
 [project.scripts]
 autodl-helper = "autodl_helper.cli:main"
