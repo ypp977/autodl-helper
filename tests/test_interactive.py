@@ -1243,9 +1243,9 @@ def test_diagnostics_menu_restart_writes_service_log_and_event(tmp_path, monkeyp
 
     assert seen == [('已重启后台服务', 'started', 0)]
     log_text = (tmp_path / 'logs' / 'service.stdout.log').read_text(encoding='utf-8')
-    assert '[服务管理] 已重启 LaunchAgent label=com.autodl.helper' in log_text
+    assert '[服务管理] 已重启后台服务 label=autodl-helper' in log_text
     history = store.read_history(task_type='service', limit=5)
-    assert any(row.task_type == 'service' and row.result == '已重启 LaunchAgent' for row in history)
+    assert any(row.task_type == 'service' and row.result == '已重启后台服务' for row in history)
 
 
 def test_interactive_run_once_resumes_paused_scheduled_job(tmp_path, monkeypatch):

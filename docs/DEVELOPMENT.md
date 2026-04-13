@@ -58,18 +58,26 @@ python main.py interactive --config config.yaml
 python main.py run-daemon --config config.yaml
 ```
 
-### macOS LaunchAgent
+### Service management
+
+后台服务由当前操作系统自动选择后端。具体平台说明见：
+
+- `docs/SERVICE.md`
+
+通用命令如下：
 
 ```bash
 python main.py service-install --config config.yaml
 python main.py service-start --config config.yaml
 python main.py service-status --config config.yaml
+python main.py service-stop --config config.yaml
+python main.py service-restart --config config.yaml
 ```
 
 ## Suggested workflow
 
-1. 从 `config.example.yaml` 复制一份本地 `config.yaml`
-2. 在 `.env` 中补齐必要环境变量
+1. 先执行 `python main.py init` 生成本地 `.env` 和 `config.yaml`
+2. 再按需修改 `.env` / `config.yaml`
 3. 先跑：
    - `pytest -q`
    - `ruff check .`
@@ -101,3 +109,5 @@ python main.py service-status --config config.yaml
 
 2. 目前 lint 策略是保守接入  
    等代码结构更稳定后，再逐步扩大规则范围，例如未使用导入、导入排序、风格一致性等。
+
+3. 服务托管相关说明应以 `docs/SERVICE.md` 为准，开发时不要再把后台服务理解成单一 macOS 专属实现。

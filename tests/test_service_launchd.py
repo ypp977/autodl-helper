@@ -98,7 +98,7 @@ def test_read_launch_agent_status_reports_install_and_loaded(tmp_path):
     def fake_run(cmd, **kwargs):
         return subprocess.CompletedProcess(cmd, 0, stdout='state = running\n', stderr='')
 
-    status = service_launchd.read_launch_agent_status(home_dir=tmp_path, run_command=fake_run)
+    status = service_launchd.read_launch_agent_status(config_path=str(tmp_path / 'config.yaml'), home_dir=tmp_path, run_command=fake_run)
 
     assert status['installed'] is True
     assert status['loaded'] is True
@@ -117,7 +117,7 @@ def test_read_launch_agent_status_reports_unloaded_when_launchctl_print_fails(tm
     def fake_run(cmd, **kwargs):
         return subprocess.CompletedProcess(cmd, 1, stdout='', stderr='not loaded')
 
-    status = service_launchd.read_launch_agent_status(home_dir=tmp_path, run_command=fake_run)
+    status = service_launchd.read_launch_agent_status(config_path=str(tmp_path / 'config.yaml'), home_dir=tmp_path, run_command=fake_run)
 
     assert status['installed'] is True
     assert status['loaded'] is False
@@ -134,7 +134,7 @@ def test_read_launch_agent_status_handles_missing_launchctl(tmp_path):
     def fake_run(cmd, **kwargs):
         raise FileNotFoundError('launchctl not found')
 
-    status = service_launchd.read_launch_agent_status(home_dir=tmp_path, run_command=fake_run)
+    status = service_launchd.read_launch_agent_status(config_path=str(tmp_path / 'config.yaml'), home_dir=tmp_path, run_command=fake_run)
 
     assert status['installed'] is True
     assert status['loaded'] is False

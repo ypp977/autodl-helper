@@ -440,11 +440,11 @@ def test_run_keeper_only_emits_window_fields(monkeypatch, tmp_path, caplog):
 def test_command_service_start_writes_lifecycle_log(tmp_path, monkeypatch):
     config_path = tmp_path / 'config.yaml'
     config_path.write_text('tasks: {}\n')
-    monkeypatch.setattr(cli_handlers, 'read_launch_agent_status', lambda: {'installed': True, 'loaded': False})
+    monkeypatch.setattr(cli_handlers, 'service_status', lambda config_path: {'installed': True, 'running': False, 'label': 'autodl-helper'})
     monkeypatch.setattr(
         cli_handlers,
-        'start_launch_agent',
-        lambda: SimpleNamespace(returncode=0, stdout='', stderr=''),
+        'start_service',
+        lambda config_path: SimpleNamespace(returncode=0, stdout='', stderr=''),
     )
 
     code = cli_handlers.command_service_start(SimpleNamespace(config=str(config_path)))
@@ -452,20 +452,125 @@ def test_command_service_start_writes_lifecycle_log(tmp_path, monkeypatch):
     assert code == 0
     log_text = (tmp_path / 'logs' / 'service.stdout.log').read_text()
     assert '[服务管理]' in log_text
-    assert '已启动 LaunchAgent' in log_text
+    assert '已启动后台服务' in log_text
+
+
+def test_command_init_bootstraps_local_files(tmp_path, monkeypatch, capsys):
+    config_path = tmp_path / 'config.yaml'
+    env_template = tmp_path / '.env.template'
+    config_template = tmp_path / 'config.example.yaml'
+    env_template.write_text('TOKEN=\n', encoding='utf-8')
+    config_template.write_text('auth:\n  authorization: Bearer token\n', encoding='utf-8')
+
+    code = cli_handlers.command_init(
+        SimpleNamespace(config=str(config_path), force=False, yes=False),
+        validate_config_fn=lambda args: 0,
+        cwd=tmp_path,
+        input_fn=lambda prompt: 'n',
+    )
+    captured = capsys.readouterr()
+
+    assert code == 0
+    assert (tmp_path / '.env').exists()
+    assert config_path.exists()
+    assert 'Created .env from template.' in captured.out
+    assert 'Created config.yaml from template.' in captured.out
+    assert 'Next:' in captured.out
+
+
+def test_command_init_preserves_existing_files_without_force(tmp_path, capsys):
+    config_path = tmp_path / 'config.yaml'
+    env_path = tmp_path / '.env'
+    (tmp_path / '.env.template').write_text('TOKEN=\n', encoding='utf-8')
+    (tmp_path / 'config.example.yaml').write_text('auth:\n  authorization: Bearer token\n', encoding='utf-8')
+    env_path.write_text('OLD=1\n', encoding='utf-8')
+    config_path.write_text('custom: true\n', encoding='utf-8')
+
+    code = cli_handlers.command_init(
+        SimpleNamespace(config=str(config_path), force=False, yes=False),
+        validate_config_fn=lambda args: 0,
+        cwd=tmp_path,
+        input_fn=lambda prompt: 'n',
+    )
+    captured = capsys.readouterr()
+
+    assert code == 0
+    assert env_path.read_text(encoding='utf-8') == 'OLD=1\n'
+    assert config_path.read_text(encoding='utf-8') == 'custom: true\n'
+    assert 'Kept existing .env.' in captured.out
+    assert 'Kept existing config.yaml.' in captured.out
+
+
+def test_command_init_can_overwrite_existing_file_via_prompt(tmp_path, capsys):
+    config_path = tmp_path / 'config.yaml'
+    env_path = tmp_path / '.env'
+    (tmp_path / '.env.template').write_text('TOKEN=\n', encoding='utf-8')
+    (tmp_path / 'config.example.yaml').write_text('auth:\n  authorization: Bearer token\n', encoding='utf-8')
+    env_path.write_text('OLD=1\n', encoding='utf-8')
+    config_path.write_text('custom: true\n', encoding='utf-8')
+    answers = iter(['y', 'n'])
+
+    code = cli_handlers.command_init(
+        SimpleNamespace(config=str(config_path), force=False, yes=False),
+        validate_config_fn=lambda args: 0,
+        cwd=tmp_path,
+        input_fn=lambda prompt: next(answers),
+    )
+    captured = capsys.readouterr()
+
+    assert code == 0
+    assert env_path.read_text(encoding='utf-8') == 'TOKEN=\n'
+    assert config_path.read_text(encoding='utf-8') == 'custom: true\n'
+    assert 'Overwrote .env from template.' in captured.out
+    assert 'Kept existing config.yaml.' in captured.out
+
+
+def test_command_init_can_launch_interactive_after_bootstrap(tmp_path):
+    config_path = tmp_path / 'config.yaml'
+    (tmp_path / '.env.template').write_text('TOKEN=\n', encoding='utf-8')
+    (tmp_path / 'config.example.yaml').write_text('auth:\n  authorization: Bearer token\n', encoding='utf-8')
+    seen = []
+
+    code = cli_handlers.command_init(
+        SimpleNamespace(config=str(config_path), force=False, yes=False),
+        validate_config_fn=lambda args: 0,
+        launch_interactive_fn=lambda args: seen.append(args.config) or 0,
+        cwd=tmp_path,
+        input_fn=lambda prompt: 'y',
+    )
+
+    assert code == 0
+    assert seen == [str(config_path)]
+
+
+def test_command_init_returns_validation_failure(tmp_path, capsys):
+    config_path = tmp_path / 'config.yaml'
+    (tmp_path / '.env.template').write_text('TOKEN=\n', encoding='utf-8')
+    (tmp_path / 'config.example.yaml').write_text('auth:\n  authorization: Bearer token\n', encoding='utf-8')
+
+    code = cli_handlers.command_init(
+        SimpleNamespace(config=str(config_path), force=False, yes=False),
+        validate_config_fn=lambda args: 1,
+        cwd=tmp_path,
+        input_fn=lambda prompt: 'n',
+    )
+    captured = capsys.readouterr()
+
+    assert code == 1
+    assert 'Configuration validation failed.' in captured.err
 
 
 def test_command_service_stop_writes_lifecycle_log_when_stopped(tmp_path, monkeypatch):
     config_path = tmp_path / 'config.yaml'
     config_path.write_text('tasks: {}\n')
-    monkeypatch.setattr(cli_handlers, 'read_launch_agent_status', lambda: {'installed': True, 'loaded': False})
+    monkeypatch.setattr(cli_handlers, 'service_status', lambda config_path: {'installed': True, 'running': False, 'label': 'autodl-helper'})
 
     code = cli_handlers.command_service_stop(SimpleNamespace(config=str(config_path)))
 
     assert code == 0
     log_text = (tmp_path / 'logs' / 'service.stdout.log').read_text()
     assert '[服务管理]' in log_text
-    assert 'LaunchAgent 已停止' in log_text
+    assert '后台服务已停止' in log_text
 
 def test_daemon_dispatch_emits_chinese_summary(monkeypatch, tmp_path, caplog):
     store = cli.SQLiteStore(tmp_path / 'data.db')

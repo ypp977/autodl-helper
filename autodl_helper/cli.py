@@ -25,6 +25,7 @@ from autodl_helper.cli_handlers import (
     command_config_show as _command_config_show_impl,
     command_db_check as _command_db_check_impl,
     command_healthcheck as _command_healthcheck_impl,
+    command_init as _command_init_impl,
     command_service_install as _command_service_install_impl,
     command_service_restart as _command_service_restart_impl,
     command_service_start as _command_service_start_impl,
@@ -675,6 +676,10 @@ def _command_healthcheck(args) -> int:
     return _command_healthcheck_impl(args, load_settings_fn=load_settings, collect_healthcheck_errors_fn=collect_healthcheck_errors)
 
 
+def _command_init(args) -> int:
+    return _command_init_impl(args, validate_config_fn=_command_validate_config, launch_interactive_fn=_command_interactive)
+
+
 def _command_service_install(args) -> int:
     return _command_service_install_impl(args)
 
@@ -823,6 +828,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         return _command_config_edit(args)
     if args.command == 'healthcheck':
         return _command_healthcheck(args)
+    if args.command == 'init':
+        return _command_init(args)
     if args.command == 'interactive':
         return _command_interactive(args)
 

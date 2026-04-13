@@ -6,6 +6,7 @@ import json
 import logging
 import os
 import re
+import shutil
 import sys
 import time
 from dataclasses import asdict
@@ -54,15 +55,14 @@ from autodl_helper.runtime_control import (
     scheduled_job_signature,
     task_due,
 )
-from autodl_helper.service_launchd import (
-    DEFAULT_SERVICE_LABEL,
-    append_service_lifecycle_log,
-    install_launch_agent,
-    read_launch_agent_status,
-    restart_launch_agent,
-    start_launch_agent,
-    stop_launch_agent,
-    uninstall_launch_agent,
+from autodl_helper.service_launchd import append_service_lifecycle_log
+from autodl_helper.services.manager import (
+    install_service,
+    restart_service,
+    service_status,
+    start_service,
+    stop_service,
+    uninstall_service,
 )
 from autodl_helper.state import StateStore
 from autodl_helper.storage import SQLiteStore
@@ -1678,6 +1678,85 @@ def command_test_notify(
     return 0
 
 
+def command_init(
+    args: argparse.Namespace,
+    *,
+    validate_config_fn: Callable[[argparse.Namespace], int] | None = None,
+    launch_interactive_fn: Callable[[argparse.Namespace], int] | None = None,
+    input_fn: Callable[[str], str] | None = None,
+    cwd: str | Path | None = None,
+) -> int:
+    root = Path(cwd).resolve() if cwd is not None else Path.cwd()
+    config_path = Path(args.config).expanduser()
+    if not config_path.is_absolute():
+        config_path = (root / config_path).resolve()
+
+    package_root = Path(__file__).resolve().parents[1]
+    env_template_path = (root / '.env.template') if (root / '.env.template').exists() else (package_root / '.env.template')
+    env_path = root / '.env'
+    config_template_path = (root / 'config.example.yaml') if (root / 'config.example.yaml').exists() else (package_root / 'config.example.yaml')
+
+    if validate_config_fn is None:
+        validate_config_fn = command_validate_config
+    if input_fn is None:
+        input_fn = input
+
+    print('[1/4] Environment')
+    print(f'Python: {sys.executable}')
+    print(f'pip: {shutil.which("pip") or "not found"}')
+    print(f'playwright: {shutil.which("playwright") or "not found"}')
+
+    def _should_overwrite(dst: Path, label: str) -> bool:
+        if getattr(args, 'force', False):
+            return True
+        if getattr(args, 'yes', False):
+            return False
+        answer = str(input_fn(f'{label} already exists. Overwrite from template? [y/N]: ')).strip().lower()
+        return answer in {'y', 'yes'}
+
+    def _sync_file(*, src: Path, dst: Path, label: str) -> None:
+        if not src.exists():
+            print(f'Missing template: {src.name}', file=sys.stderr)
+            raise FileNotFoundError(src)
+        if dst.exists():
+            if not _should_overwrite(dst, label):
+                print(f'Kept existing {label}.')
+                return
+            action = 'Overwrote'
+        else:
+            action = 'Created'
+        dst.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(src, dst)
+        print(f'{action} {label} from template.')
+
+    print('[2/4] Bootstrap files')
+    try:
+        _sync_file(src=env_template_path, dst=env_path, label='.env')
+        _sync_file(src=config_template_path, dst=config_path, label=config_path.name)
+    except FileNotFoundError:
+        return 1
+
+    print('[3/4] Validate config')
+    validation_code = validate_config_fn(argparse.Namespace(config=str(config_path)))
+    if validation_code != 0:
+        print('Configuration validation failed.', file=sys.stderr)
+        return int(validation_code or 1)
+
+    print('[4/4] Ready')
+    print('Bootstrap complete.')
+    print('Next:')
+    print(f'  python main.py interactive --config {config_path.name}')
+    print(f'  python main.py login --config {config_path.name} --account <account-name>')
+    print(f'  python main.py service-install --config {config_path.name}')
+
+    if launch_interactive_fn is not None and not getattr(args, 'yes', False):
+        answer = str(input_fn('Launch interactive now? [y/N]: ')).strip().lower()
+        if answer in {'y', 'yes'}:
+            interactive_args = argparse.Namespace(**vars(args))
+            interactive_args.config = str(config_path)
+            return int(launch_interactive_fn(interactive_args) or 0)
+    return 0
+
 def command_validate_config(
     args: argparse.Namespace,
     *,
@@ -1907,7 +1986,7 @@ def _record_service_event(
             level,
             message,
             payload={
-                'label': DEFAULT_SERVICE_LABEL,
+                'label': '后台服务',
                 'action': action,
                 'detail': detail,
                 'plist_path': plist_path,
@@ -1917,71 +1996,84 @@ def _record_service_event(
         logger.exception('写入服务事件历史失败')
 
 
+def _service_event_label(payload: dict[str, Any] | None) -> str:
+    data = payload or {}
+    return str(data.get('label') or data.get('backend') or '后台服务')
+
+
 def command_service_install(args: argparse.Namespace) -> int:
-    plist_path = install_launch_agent(config_path=args.config)
-    _log_service_action(args.config, f'已安装 LaunchAgent label={DEFAULT_SERVICE_LABEL} plist={plist_path}')
-    _record_service_event(args.config, action='install', message='已安装 LaunchAgent', plist_path=str(plist_path))
-    print(f'Installed LaunchAgent plist: {plist_path}')
+    status = install_service(config_path=args.config)
+    label = _service_event_label(status)
+    artifact_path = status.get('artifact_path') or ''
+    _log_service_action(args.config, f'已安装后台服务 label={label} backend={status.get("backend") or "-"} artifact={artifact_path}')
+    _record_service_event(args.config, action='install', message='已安装后台服务', detail=str(status.get('detail') or ''), plist_path=str(artifact_path))
+    print(f'Installed background service ({status.get("backend")}): {artifact_path}')
     return 0
 
 
 def command_service_start(args: argparse.Namespace) -> int:
-    status = read_launch_agent_status()
+    status = service_status(config_path=args.config)
+    label = _service_event_label(status)
     if not status.get('installed'):
-        print('LaunchAgent 未安装，请先执行 service-install。', file=sys.stderr)
+        print('后台服务未安装，请先执行 service-install。', file=sys.stderr)
         return 1
-    if status.get('loaded'):
-        _log_service_action(args.config, f'LaunchAgent 已在运行 label={DEFAULT_SERVICE_LABEL}')
-        _record_service_event(args.config, action='start', message='LaunchAgent 已在运行')
-        print(f'LaunchAgent already running: {DEFAULT_SERVICE_LABEL}')
+    if status.get('running'):
+        _log_service_action(args.config, f'后台服务已在运行 label={label}')
+        _record_service_event(args.config, action='start', message='后台服务已在运行')
+        print(f'Background service already running: {label}')
         return 0
-    result = start_launch_agent()
+    result = start_service(config_path=args.config)
     if result.returncode != 0:
-        _record_service_event(args.config, action='start', message='启动 LaunchAgent 失败', level='error', detail=(result.stderr or result.stdout or '').strip())
-        print((result.stderr or result.stdout or 'launchctl bootstrap failed').strip(), file=sys.stderr)
+        detail = (result.stderr or result.stdout or 'service start failed').strip()
+        _record_service_event(args.config, action='start', message='启动后台服务失败', level='error', detail=detail)
+        print(detail, file=sys.stderr)
         return int(result.returncode or 1)
-    _log_service_action(args.config, f'已启动 LaunchAgent label={DEFAULT_SERVICE_LABEL}')
-    _record_service_event(args.config, action='start', message='已启动 LaunchAgent')
-    print(f'Started LaunchAgent: {DEFAULT_SERVICE_LABEL}')
+    _log_service_action(args.config, f'已启动后台服务 label={label}')
+    _record_service_event(args.config, action='start', message='已启动后台服务')
+    print(f'Started background service: {label}')
     return 0
 
 
 def command_service_stop(args: argparse.Namespace) -> int:
-    status = read_launch_agent_status()
+    status = service_status(config_path=args.config)
+    label = _service_event_label(status)
     if not status.get('installed'):
-        _log_service_action(args.config, f'LaunchAgent 未安装 label={DEFAULT_SERVICE_LABEL}')
-        _record_service_event(args.config, action='stop', message='LaunchAgent 未安装')
-        print(f'LaunchAgent already absent: {DEFAULT_SERVICE_LABEL}')
+        _log_service_action(args.config, f'后台服务未安装 label={label}')
+        _record_service_event(args.config, action='stop', message='后台服务未安装')
+        print(f'Background service already absent: {label}')
         return 0
-    if not status.get('loaded'):
-        _log_service_action(args.config, f'LaunchAgent 已停止 label={DEFAULT_SERVICE_LABEL}')
-        _record_service_event(args.config, action='stop', message='LaunchAgent 已停止')
-        print(f'LaunchAgent already stopped: {DEFAULT_SERVICE_LABEL}')
+    if not status.get('running'):
+        _log_service_action(args.config, f'后台服务已停止 label={label}')
+        _record_service_event(args.config, action='stop', message='后台服务已停止')
+        print(f'Background service already stopped: {label}')
         return 0
-    result = stop_launch_agent()
+    result = stop_service(config_path=args.config)
     if result.returncode != 0:
-        _record_service_event(args.config, action='stop', message='停止 LaunchAgent 失败', level='error', detail=(result.stderr or result.stdout or '').strip())
-        print((result.stderr or result.stdout or 'launchctl bootout failed').strip(), file=sys.stderr)
+        detail = (result.stderr or result.stdout or 'service stop failed').strip()
+        _record_service_event(args.config, action='stop', message='停止后台服务失败', level='error', detail=detail)
+        print(detail, file=sys.stderr)
         return int(result.returncode or 1)
-    _log_service_action(args.config, f'已停止 LaunchAgent label={DEFAULT_SERVICE_LABEL}')
-    _record_service_event(args.config, action='stop', message='已停止 LaunchAgent')
-    print(f'Stopped LaunchAgent: {DEFAULT_SERVICE_LABEL}')
+    _log_service_action(args.config, f'已停止后台服务 label={label}')
+    _record_service_event(args.config, action='stop', message='已停止后台服务')
+    print(f'Stopped background service: {label}')
     return 0
 
 
 def command_service_restart(args: argparse.Namespace) -> int:
-    status = read_launch_agent_status()
+    status = service_status(config_path=args.config)
+    label = _service_event_label(status)
     if not status.get('installed'):
-        print('LaunchAgent 未安装，请先执行 service-install。', file=sys.stderr)
+        print('后台服务未安装，请先执行 service-install。', file=sys.stderr)
         return 1
-    result = restart_launch_agent()
+    result = restart_service(config_path=args.config)
     if result.returncode != 0:
-        _record_service_event(args.config, action='restart', message='重启 LaunchAgent 失败', level='error', detail=(result.stderr or result.stdout or '').strip())
-        print((result.stderr or result.stdout or 'launchctl bootstrap failed').strip(), file=sys.stderr)
+        detail = (result.stderr or result.stdout or 'service restart failed').strip()
+        _record_service_event(args.config, action='restart', message='重启后台服务失败', level='error', detail=detail)
+        print(detail, file=sys.stderr)
         return int(result.returncode or 1)
-    _log_service_action(args.config, f'已重启 LaunchAgent label={DEFAULT_SERVICE_LABEL}')
-    _record_service_event(args.config, action='restart', message='已重启 LaunchAgent')
-    print(f'Restarted LaunchAgent: {DEFAULT_SERVICE_LABEL}')
+    _log_service_action(args.config, f'已重启后台服务 label={label}')
+    _record_service_event(args.config, action='restart', message='已重启后台服务')
+    print(f'Restarted background service: {label}')
     return 0
 
 
@@ -1993,26 +2085,27 @@ def command_service_status(
 ) -> int:
     settings = load_settings_fn(args.config)
     store = create_store_fn(settings)
-    launchd_status = read_launch_agent_status()
+    service = service_status(config_path=args.config)
     daemon_status = read_daemon_status(store)
     reload_status = read_config_reload_status(store)
-    print(json.dumps({'launchd': launchd_status, 'daemon': daemon_status, 'reload': reload_status}, ensure_ascii=False, indent=2))
+    print(json.dumps({'service': service, 'daemon': daemon_status, 'reload': reload_status}, ensure_ascii=False, indent=2))
     return 0
 
 
 def command_service_uninstall(args: argparse.Namespace) -> int:
-    status = read_launch_agent_status()
+    status = service_status(config_path=args.config)
+    label = _service_event_label(status)
     if not status.get('installed'):
-        _log_service_action(args.config, f'LaunchAgent 已不存在 label={DEFAULT_SERVICE_LABEL}')
-        _record_service_event(args.config, action='uninstall', message='LaunchAgent 已不存在')
-        print(f'LaunchAgent already absent: {DEFAULT_SERVICE_LABEL}')
+        _log_service_action(args.config, f'后台服务已不存在 label={label}')
+        _record_service_event(args.config, action='uninstall', message='后台服务已不存在')
+        print(f'Background service already absent: {label}')
         return 0
-    plist_path = uninstall_launch_agent()
-    _log_service_action(args.config, f'已卸载 LaunchAgent label={DEFAULT_SERVICE_LABEL} plist={plist_path}')
-    _record_service_event(args.config, action='uninstall', message='已卸载 LaunchAgent', plist_path=str(plist_path))
-    print(f'Uninstalled LaunchAgent: {DEFAULT_SERVICE_LABEL}')
+    removed = uninstall_service(config_path=args.config)
+    artifact_path = removed.get('artifact_path') or ''
+    _log_service_action(args.config, f'已卸载后台服务 label={label} artifact={artifact_path}')
+    _record_service_event(args.config, action='uninstall', message='已卸载后台服务', plist_path=str(artifact_path))
+    print(f'Uninstalled background service: {label}')
     return 0
-
 
 def command_interactive(
     args: argparse.Namespace,

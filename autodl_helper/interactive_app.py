@@ -50,13 +50,25 @@ from autodl_helper.runtime_control import (
     read_daemon_status,
     scheduled_job_identity,
 )
-from autodl_helper.service_launchd import (
-    DEFAULT_SERVICE_LABEL,
-    append_service_lifecycle_log,
-    read_launch_agent_status,
-    start_launch_agent,
-    stop_launch_agent,
-)
+from autodl_helper.service_launchd import append_service_lifecycle_log
+from autodl_helper.services.manager import service_status as _service_status
+from autodl_helper.services.manager import start_service as _start_service
+from autodl_helper.services.manager import stop_service as _stop_service
+
+DEFAULT_SERVICE_LABEL = 'autodl-helper'
+_SERVICE_CONFIG_PATH = 'config.yaml'
+
+
+def read_launch_agent_status(config_path: str | None = None) -> dict[str, Any]:
+    return _service_status(config_path=config_path or _SERVICE_CONFIG_PATH)
+
+
+def start_launch_agent(config_path: str | None = None):
+    return _start_service(config_path=config_path or _SERVICE_CONFIG_PATH)
+
+
+def stop_launch_agent(config_path: str | None = None):
+    return _stop_service(config_path=config_path or _SERVICE_CONFIG_PATH)
 
 RESET = '\033[0m'
 DIM = '\033[38;5;245m'
@@ -4562,7 +4574,7 @@ def _history_record_subject(row: HistoryRecord) -> str:
     if row.task_type == 'keeper':
         return str(payload.get('instance_id') or row.instance_id or '-')
     if row.task_type == 'service':
-        return str(payload.get('label') or 'LaunchAgent')
+        return str(payload.get('label') or '后台服务')
     return str(payload.get('selected_instance_id') or payload.get('instance_id') or row.instance_id or '-')
 
 
@@ -6202,35 +6214,35 @@ def _diagnostics_menu(
                     )
                     continue
                 if bool(service_status.get('loaded')):
-                    _append_interactive_service_log(args.config, f'LaunchAgent 已在运行 label={DEFAULT_SERVICE_LABEL}')
-                    _record_interactive_service_event(store, action='start', message='LaunchAgent 已在运行')
+                    _append_interactive_service_log(args.config, f'后台服务已在运行 label={DEFAULT_SERVICE_LABEL}')
+                    _record_interactive_service_event(store, action='start', message='后台服务已在运行')
                     _print_execution_summary('后台服务已在运行', detail=str(service_status.get('label') or ''))
                     continue
                 code, detail = _normalize_service_action_result(service_start_fn())
                 if code == 0:
-                    _append_interactive_service_log(args.config, f'已启动 LaunchAgent label={DEFAULT_SERVICE_LABEL}')
-                    _record_interactive_service_event(store, action='start', message='已启动 LaunchAgent')
+                    _append_interactive_service_log(args.config, f'已启动后台服务 label={DEFAULT_SERVICE_LABEL}')
+                    _record_interactive_service_event(store, action='start', message='已启动后台服务')
                 else:
-                    _record_interactive_service_event(store, action='start', message='启动 LaunchAgent 失败', level='error', detail=detail or '')
+                    _record_interactive_service_event(store, action='start', message='启动后台服务失败', level='error', detail=detail or '')
                 _print_execution_summary('已启动后台服务' if code == 0 else '启动后台服务失败', code=code, detail=detail or None)
             elif choice == '6':
                 service_status = service_status_fn() if callable(service_status_fn) else {}
                 if not bool(service_status.get('installed')):
-                    _append_interactive_service_log(args.config, f'LaunchAgent 未安装 label={DEFAULT_SERVICE_LABEL}')
-                    _record_interactive_service_event(store, action='stop', message='LaunchAgent 未安装')
+                    _append_interactive_service_log(args.config, f'后台服务未安装 label={DEFAULT_SERVICE_LABEL}')
+                    _record_interactive_service_event(store, action='stop', message='后台服务未安装')
                     _print_execution_summary('后台服务未安装')
                     continue
                 if not bool(service_status.get('loaded')):
-                    _append_interactive_service_log(args.config, f'LaunchAgent 已停止 label={DEFAULT_SERVICE_LABEL}')
-                    _record_interactive_service_event(store, action='stop', message='LaunchAgent 已停止')
+                    _append_interactive_service_log(args.config, f'后台服务已停止 label={DEFAULT_SERVICE_LABEL}')
+                    _record_interactive_service_event(store, action='stop', message='后台服务已停止')
                     _print_execution_summary('后台服务未在运行', detail=str(service_status.get('label') or ''))
                     continue
                 code, detail = _normalize_service_action_result(service_stop_fn())
                 if code == 0:
-                    _append_interactive_service_log(args.config, f'已停止 LaunchAgent label={DEFAULT_SERVICE_LABEL}')
-                    _record_interactive_service_event(store, action='stop', message='已停止 LaunchAgent')
+                    _append_interactive_service_log(args.config, f'已停止后台服务 label={DEFAULT_SERVICE_LABEL}')
+                    _record_interactive_service_event(store, action='stop', message='已停止后台服务')
                 else:
-                    _record_interactive_service_event(store, action='stop', message='停止 LaunchAgent 失败', level='error', detail=detail or '')
+                    _record_interactive_service_event(store, action='stop', message='停止后台服务失败', level='error', detail=detail or '')
                 _print_execution_summary('已停止后台服务' if code == 0 else '停止后台服务失败', code=code, detail=detail or None)
             elif choice == '7':
                 service_status = service_status_fn() if callable(service_status_fn) else {}
@@ -6243,15 +6255,15 @@ def _diagnostics_menu(
                 if bool(service_status.get('loaded')):
                     stop_code, stop_detail = _normalize_service_action_result(service_stop_fn())
                     if stop_code != 0:
-                        _record_interactive_service_event(store, action='restart', message='重启 LaunchAgent 失败', level='error', detail=stop_detail or '')
+                        _record_interactive_service_event(store, action='restart', message='重启后台服务失败', level='error', detail=stop_detail or '')
                         _print_execution_summary('重启后台服务失败', code=stop_code, detail=stop_detail or None)
                         continue
                 code, detail = _normalize_service_action_result(service_start_fn())
                 if code == 0:
-                    _append_interactive_service_log(args.config, f'已重启 LaunchAgent label={DEFAULT_SERVICE_LABEL}')
-                    _record_interactive_service_event(store, action='restart', message='已重启 LaunchAgent')
+                    _append_interactive_service_log(args.config, f'已重启后台服务 label={DEFAULT_SERVICE_LABEL}')
+                    _record_interactive_service_event(store, action='restart', message='已重启后台服务')
                 else:
-                    _record_interactive_service_event(store, action='restart', message='重启 LaunchAgent 失败', level='error', detail=detail or '')
+                    _record_interactive_service_event(store, action='restart', message='重启后台服务失败', level='error', detail=detail or '')
                 _print_execution_summary('已重启后台服务' if code == 0 else '重启后台服务失败', code=code, detail=detail or None)
             elif choice == '0':
                 return
@@ -6299,6 +6311,8 @@ def run_interactive(
     scheduled_candidate_panel_data_fn: Callable[..., dict[str, Any] | None],
     render_candidate_explanation_fn: Callable[[dict[str, Any] | None], str],
 ) -> int:
+    global _SERVICE_CONFIG_PATH
+    _SERVICE_CONFIG_PATH = args.config
     reset_thread_capture_state()
     settings = load_settings_fn(args.config)
     store = create_store_fn(settings)

@@ -106,6 +106,16 @@ def test_login_command_delegates_to_handler(monkeypatch):
     assert code == 0
     assert calls == [('login', 'main', False)]
 
+def test_init_command_delegates_to_handler(monkeypatch):
+    calls = []
+    monkeypatch.setattr(cli, '_command_init', lambda args: calls.append((args.command, args.config, args.force, args.yes)) or 0)
+
+    code = cli.main(['init', '--config', 'config.yaml'])
+
+    assert code == 0
+    assert calls == [('init', 'config.yaml', False, False)]
+
+
 
 def test_short_alias_grab_invokes_scheduled_start(monkeypatch):
     calls = []

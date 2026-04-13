@@ -12,7 +12,7 @@ It has three main execution surfaces:
 2. **foreground daemon**
 3. **interactive terminal console**
 
-It uses **SQLite** for local persistence and can use **macOS LaunchAgent** for long-running background execution.
+It uses **SQLite** for local persistence and a platform-specific service backend for long-running background execution.
 
 ---
 
@@ -78,9 +78,9 @@ These modules are the core business logic of the project.
 Files:
 
 - `autodl_helper/runtime_control.py`
-- `autodl_helper/service_launchd.py`
 - `autodl_helper/lock.py`
 - `autodl_helper/state.py`
+- `autodl_helper/services/`
 
 Responsibilities:
 
@@ -89,7 +89,7 @@ Responsibilities:
 - runtime task enable/disable flags
 - config reload state
 - local locking/state files
-- LaunchAgent lifecycle on macOS
+- service backend selection and lifecycle management
 
 ### 5. Storage layer
 
@@ -203,9 +203,15 @@ Important:
 - interactive is a console/controller
 - it is not the daemon itself
 
-## LaunchAgent mode
+## Service backend mode
 
-On macOS, long-running background execution is expected to use LaunchAgent.
+Long-running background execution is handled by the platform service backend selected by the service manager.
+
+Current backends:
+
+- macOS → LaunchAgent
+- Linux → systemd user service
+- Windows → Task Scheduler
 
 This adds:
 
@@ -278,6 +284,7 @@ autodl_helper/   # package source
 tests/           # pytest suite
 docs/            # user/developer docs
 scripts/         # helper scripts
+autodl_helper/services/  # platform service backend helpers
 ```
 
 Supporting files:
@@ -298,6 +305,7 @@ For open-source maintainability, these boundaries should remain clear:
 - daemon/runtime control stays in `runtime_control.py`
 - business logic stays in `tasks/`
 - SQLite persistence stays in `storage.py`
+- service backend selection and platform-specific lifecycle stay under `services/`
 - terminal UI stays in `interactive_*`
 
 Avoid mixing:

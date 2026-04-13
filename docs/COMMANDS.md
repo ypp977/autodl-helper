@@ -63,13 +63,36 @@ python main.py grab --config config.yaml
 
 ---
 
-## macOS service management
+## Bootstrap
 
-These commands manage the LaunchAgent-backed daemon process.
+### `init`
+
+Run the first-run bootstrap wizard: create local `.env` and `config.yaml` from templates, validate the config, and optionally jump into `interactive`.
+
+```bash
+python main.py init
+python main.py init --config custom.yaml
+python main.py init --yes
+python main.py init --force
+```
+
+Use this as the default first-run command before `interactive`, `login`, or `service-install`.
+
+---
+
+## Service management
+
+These commands manage the background service for the current platform.
+
+The service backend is selected automatically:
+
+- macOS → LaunchAgent
+- Linux → systemd user service
+- Windows → Task Scheduler
 
 ### `service-install`
 
-Install LaunchAgent.
+Install the background service for the current platform.
 
 ```bash
 python main.py service-install --config config.yaml
@@ -77,7 +100,7 @@ python main.py service-install --config config.yaml
 
 ### `service-start`
 
-Start installed LaunchAgent.
+Start the installed background service.
 
 ```bash
 python main.py service-start --config config.yaml
@@ -85,7 +108,7 @@ python main.py service-start --config config.yaml
 
 ### `service-stop`
 
-Stop installed LaunchAgent.
+Stop the installed background service.
 
 ```bash
 python main.py service-stop --config config.yaml
@@ -93,7 +116,7 @@ python main.py service-stop --config config.yaml
 
 ### `service-restart`
 
-Restart installed LaunchAgent.
+Restart the installed background service.
 
 ```bash
 python main.py service-restart --config config.yaml
@@ -101,7 +124,7 @@ python main.py service-restart --config config.yaml
 
 ### `service-status`
 
-Show LaunchAgent + daemon status.
+Show the background service and daemon status.
 
 ```bash
 python main.py service-status --config config.yaml
@@ -109,7 +132,7 @@ python main.py service-status --config config.yaml
 
 ### `service-uninstall`
 
-Remove LaunchAgent.
+Remove the background service.
 
 ```bash
 python main.py service-uninstall --config config.yaml

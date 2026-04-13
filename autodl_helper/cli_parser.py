@@ -71,23 +71,28 @@ def build_parser() -> argparse.ArgumentParser:
     _add_run_args(run_scheduled_parser)
     _add_runtime_override_args(run_scheduled_parser)
 
-    service_install_parser = subparsers.add_parser('service-install', help='Install macOS LaunchAgent for run-daemon')
+    service_install_parser = subparsers.add_parser('service-install', help='Install background service for run-daemon')
     service_install_parser.add_argument('--config', default='config.yaml', help='Path to YAML config file')
 
-    service_start_parser = subparsers.add_parser('service-start', help='Start installed macOS LaunchAgent')
+    service_start_parser = subparsers.add_parser('service-start', help='Start installed background service')
     service_start_parser.add_argument('--config', default='config.yaml', help='Path to YAML config file')
 
-    service_stop_parser = subparsers.add_parser('service-stop', help='Stop installed macOS LaunchAgent')
+    service_stop_parser = subparsers.add_parser('service-stop', help='Stop installed background service')
     service_stop_parser.add_argument('--config', default='config.yaml', help='Path to YAML config file')
 
-    service_restart_parser = subparsers.add_parser('service-restart', help='Restart installed macOS LaunchAgent')
+    service_restart_parser = subparsers.add_parser('service-restart', help='Restart installed background service')
     service_restart_parser.add_argument('--config', default='config.yaml', help='Path to YAML config file')
 
-    service_status_parser = subparsers.add_parser('service-status', help='Show macOS LaunchAgent and daemon status')
+    service_status_parser = subparsers.add_parser('service-status', help='Show background service and daemon status')
     service_status_parser.add_argument('--config', default='config.yaml', help='Path to YAML config file')
 
-    service_uninstall_parser = subparsers.add_parser('service-uninstall', help='Uninstall macOS LaunchAgent')
+    service_uninstall_parser = subparsers.add_parser('service-uninstall', help='Uninstall background service')
     service_uninstall_parser.add_argument('--config', default='config.yaml', help='Path to YAML config file')
+
+    init_parser = subparsers.add_parser('init', help='Bootstrap local .env and config.yaml for first run')
+    init_parser.add_argument('--config', default='config.yaml', help='Path to YAML config file')
+    init_parser.add_argument('--force', action='store_true', help='Overwrite existing local bootstrap files')
+    init_parser.add_argument('--yes', action='store_true', help='Accept defaults without interactive prompts')
 
     accounts_parser = subparsers.add_parser('accounts', help='Show configured account and login status')
     accounts_parser.add_argument('--config', default='config.yaml', help='Path to YAML config file')

@@ -7,7 +7,7 @@
 - 多账号运行控制
 - 本地 SQLite 历史与事件记录
 - 交互式终端控制台
-- macOS LaunchAgent 后台托管
+- 平台化后台托管（按操作系统自动选择后端）
 
 当前定位：
 
@@ -19,6 +19,7 @@
 
 - 配置说明：`docs/CONFIGURATION.md`
 - 命令说明：`docs/COMMANDS.md`
+- 服务托管说明：`docs/SERVICE.md`
 - 架构说明：`docs/ARCHITECTURE.md`
 - 开发指南：`docs/DEVELOPMENT.md`
 - 隐私与数据说明：`docs/PRIVACY.md`
@@ -55,37 +56,40 @@
   - 查看诊断信息
   - 启停后台服务
 
+## Platform support
+
+| Capability | macOS | Linux | Windows |
+| --- | --- | --- | --- |
+| CLI commands | ✅ | ✅ | ✅ |
+| `interactive` | ✅ | ✅ | ✅ |
+| `run-daemon` | ✅ | ✅ | ✅ |
+| `service-install/start/stop/restart/status/uninstall` | ✅ LaunchAgent | ✅ systemd user | ✅ Task Scheduler |
+
 ## Quick Start
 
 ### 1. Clone
 
 ```bash
-git clone https://github.com/yangpengpeng/autodl-helper.git
+git clone https://github.com/ypp977/autodl-helper.git
 cd autodl-helper
 ```
 
-### 2. Use local Python
-
-```bash
-python --version
-pip --version
-```
-
-### 3. Install dependencies
+### 2. Install dependencies
 
 ```bash
 python -m pip install -r requirements.txt
 playwright install chromium
 ```
 
-### 4. Prepare config
+### 3. Bootstrap local files
 
 ```bash
-cp .env.template .env
-cp config.example.yaml config.yaml
+python main.py init
 ```
 
-### 5. Run
+This opens the first-run bootstrap wizard: it checks the local environment, creates local `.env` and `config.yaml` from templates, validates the config, and can jump into `interactive` directly.
+
+### 4. Run
 
 ```bash
 python main.py interactive --config config.yaml
@@ -95,6 +99,7 @@ python main.py interactive --config config.yaml
 
 ```bash
 python -m pip install -e .[dev]
+autodl-helper init
 autodl-helper --help
 ```
 
@@ -144,6 +149,20 @@ python main.py run-keeper --config config.yaml
 python main.py run-scheduled-start --config config.yaml
 ```
 
+### First-run bootstrap
+
+```bash
+python main.py init
+python main.py interactive --config config.yaml
+```
+
+If you need non-interactive defaults or want to overwrite existing local files, run:
+
+```bash
+python main.py init --yes
+python main.py init --force
+```
+
 ### Accounts and login
 
 ```bash
@@ -170,7 +189,13 @@ python main.py healthcheck --config config.yaml --smoke
 python main.py interactive --config config.yaml
 ```
 
-### macOS background service
+### Service management
+
+服务托管由当前操作系统自动选择后端。完整说明见：
+
+- `docs/SERVICE.md`
+
+通用命令如下：
 
 ```bash
 python main.py service-install --config config.yaml
@@ -195,7 +220,7 @@ autodl_helper/
 ├── config.py               # settings model and loading
 ├── interactive_*.py        # terminal UI
 ├── runtime_control.py      # daemon heartbeat, reload, runtime flags
-├── service_launchd.py      # LaunchAgent integration
+├── services/               # platform service backends
 ├── storage.py              # SQLite store
 ├── events.py               # history/event summaries
 └── tasks/
@@ -218,6 +243,7 @@ config.test.yaml    # test config
 开发文档见：
 
 - `docs/DEVELOPMENT.md`
+- `docs/SERVICE.md`
 
 Run tests:
 
@@ -249,7 +275,7 @@ python -m py_compile $(find autodl_helper -name '*.py')
 ## Limitations
 
 - 当前是 **CLI-first** 项目，不包含 Web UI
-- 当前后台服务实现偏向 **macOS LaunchAgent**
+- 服务托管由平台后端提供，具体支持边界见 `docs/SERVICE.md`
 - Playwright 依赖浏览器环境
 - 项目仍偏向真实 AutoDL 使用场景，公开发布前仍需人工检查截图、示例配置和历史记录
 
@@ -257,7 +283,8 @@ python -m py_compile $(find autodl_helper -name '*.py')
 
 适合继续整理的方向：
 
-- Linux service manager 支持
+- 继续完善跨平台服务托管说明
+- 持续收敛交互式页面与诊断页结构
 - 更清晰的 package / command 文档
 - CI 扩展（lint / smoke / release）
 - 发布 PyPI 包
@@ -269,7 +296,7 @@ MIT. See `LICENSE`.
 
 ## Acknowledgement
 
-本项目当前由 `yangpengpeng` 独立维护，并作为新的开源仓库持续演进。
+本项目当前由 `ypp977` 独立维护，并作为新的开源仓库持续演进。
 
 项目早期参考并演进自 [turbo-duck/autodl-keeper](https://github.com/turbo-duck/autodl-keeper)。
 当前仓库未保留原始 git 提交历史，但会继续保留 MIT License 要求的许可与版权声明。

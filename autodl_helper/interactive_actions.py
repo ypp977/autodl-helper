@@ -10,7 +10,11 @@ from autodl_helper.config import AccountSettings, Settings
 from autodl_helper.models import AuthEventSummary, HistoryRecord
 from autodl_helper.runtime_control import get_task_enabled, scheduled_job_identity, scheduled_job_signature
 from autodl_helper.runtime_control import read_daemon_launch_status, read_daemon_status, request_config_reload
-from autodl_helper.service_launchd import read_launch_agent_status
+from autodl_helper.services.manager import service_status as _service_status
+
+
+def read_launch_agent_status(config_path: str = 'config.yaml') -> dict[str, Any]:
+    return _service_status(config_path=config_path)
 from autodl_helper.storage import SQLiteStore
 
 SERVICE_HEARTBEAT_OK_SECONDS = 75

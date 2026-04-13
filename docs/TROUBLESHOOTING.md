@@ -55,9 +55,14 @@ tail -n 50 logs/service.stdout.log
 Common causes:
 
 - old stderr still contains a previous crash
-- LaunchAgent is installed but not currently loaded
 - daemon heartbeat stopped moving
 - config reload failed
+
+Platform-specific checks:
+
+- macOS: verify the LaunchAgent is installed and loaded
+- Linux: verify `systemctl --user status autodl-helper`
+- Windows: verify the scheduled task exists and is enabled
 
 Try:
 
