@@ -1,0 +1,121 @@
+from __future__ import annotations
+
+import logging
+from datetime import datetime, timedelta
+
+logger = logging.getLogger(__name__)
+
+
+def _scheduled_start_reason_label(reason: str) -> str:
+    if reason in {'window_already_succeeded'}:
+        return '当前窗口已完成'
+    if reason in {'outside_window'}:
+        return '未到执行窗口'
+    if reason in {'selector_no_match', 'instance_missing'}:
+        return '暂无可用目标'
+    if reason in {'gpu_idle_zero', 'no_eligible_candidate', 'running_without_gpu', 'retrying'}:
+        return '候选暂不可抢'
+    if reason in {'already_running', 'started'}:
+        return '实例已在运行'
+    if reason in {'power_on_submitted'}:
+        return '已提交开机'
+    if reason in {'deadline_failed', 'deadline_missed'}:
+        return '已过截止时间'
+    if reason in {'task_paused'}:
+        return '任务已暂停'
+    if reason in {'scheduled_disabled'}:
+        return '配置未启用'
+    return reason or '-'
+
+
+def _format_scheduled_window(*, target_time: str, advance_hours: int, now: datetime) -> str:
+    try:
+        hh, mm = map(int, target_time.split(':'))
+        target_dt = now.replace(hour=hh, minute=mm, second=0, microsecond=0)
+        window_start = target_dt - timedelta(hours=max(0, advance_hours))
+        return f'{window_start.strftime("%H:%M")}-{target_dt.strftime("%H:%M")}'
+    except Exception:
+        return '-'
+
+
+def _format_next_check(*, now: datetime, poll_interval_seconds: int) -> str:
+    try:
+        return (now + timedelta(seconds=max(1, poll_interval_seconds))).strftime('%H:%M:%S')
+    except Exception:
+        return '-'
+
+
+def _format_local_time_label(value: str) -> str:
+    raw = (value or '').strip()
+    if not raw:
+        return '-'
+    try:
+        parsed = datetime.fromisoformat(raw.replace(' ', 'T'))
+    except ValueError:
+        return raw
+    return parsed.strftime('%m-%d %H:%M:%S')
+
+
+def _format_keeper_window(*, next_keeper_time: str, release_deadline: str) -> str:
+    start = _format_local_time_label(next_keeper_time)
+    end = _format_local_time_label(release_deadline)
+    if start == '-' and end == '-':
+        return '-'
+    return f'{start} ~ {end}'
+
+
+def _log_scheduled_start_summary(
+    *,
+    account_name: str,
+    job_name: str,
+    target_time: str,
+    advance_hours: int,
+    schedule_mode: str,
+    poll_interval_seconds: int,
+    status: str,
+    reason: str,
+    now: datetime,
+    instance_id: str = '',
+    candidate_count: int | None = None,
+) -> None:
+    status_label = {
+        'skip': '跳过',
+        'started': '已开机',
+        'success': '已开机',
+        'already_running': '已在运行',
+        'power_on_submitted': '已提交开机',
+        'started_without_gpu': '等待',
+        'retrying': '等待',
+        'waiting_for_instance': '等待',
+        'waiting_for_gpu': '等待',
+        'deadline_failed': '失败',
+        'instance_missing': '失败',
+        'failure': '失败',
+        'outside_window': '跳过',
+    }.get(status, status or '-')
+    fields = [
+        f'账号={account_name}',
+        f'任务={job_name}',
+        f'目标={target_time}',
+        f'计划={"单次" if schedule_mode == "once" else "每天"}',
+        f'间隔={poll_interval_seconds}秒',
+        f'当前窗口={_format_scheduled_window(target_time=target_time, advance_hours=advance_hours, now=now)}',
+        f'下次检查={_format_next_check(now=now, poll_interval_seconds=poll_interval_seconds)}',
+        f'结果={status_label}',
+        f'原因={_scheduled_start_reason_label(reason)}',
+    ]
+    if instance_id:
+        fields.append(f'实例={instance_id}')
+    if candidate_count is not None:
+        fields.append(f'候选数={candidate_count}')
+    logger.info('[抢机检查] %s', ' '.join(fields))
+
+
+__all__ = [
+    "_scheduled_start_reason_label",
+    "_format_scheduled_window",
+    "_format_next_check",
+    "_format_local_time_label",
+    "_format_keeper_window",
+    "_log_scheduled_start_summary",
+]

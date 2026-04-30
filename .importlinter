@@ -1,0 +1,36 @@
+[importlinter]
+root_package = autodl_helper
+
+[importlinter:contract:interactive features must not import interactive app]
+name = Interactive features must not import app entrypoints
+type = forbidden
+source_modules =
+    autodl_helper.interactive.features
+forbidden_modules =
+    autodl_helper.interactive.app
+    autodl_helper.interactive_app
+
+[importlinter:contract:interactive support must not import interactive app]
+name = Interactive support must not import app entrypoints
+type = forbidden
+source_modules =
+    autodl_helper.interactive.support
+forbidden_modules =
+    autodl_helper.interactive.app
+    autodl_helper.interactive_app
+
+[importlinter:contract:cli shared and commands must not import cli entrypoints]
+name = CLI shared and commands must not import cli entrypoints
+type = forbidden
+source_modules =
+    autodl_helper.cli.shared
+    autodl_helper.cli.shared_accounts
+    autodl_helper.cli.shared_edit
+    autodl_helper.cli.shared_healthcheck
+    autodl_helper.cli.shared_notifications
+    autodl_helper.cli.shared_scheduled
+    autodl_helper.cli.shared_settings
+    autodl_helper.cli.commands
+forbidden_modules =
+    autodl_helper.cli.app
+    autodl_helper.cli.handlers

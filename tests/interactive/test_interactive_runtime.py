@@ -365,3 +365,34 @@ def test_reset_thread_capture_state_clears_leaked_capture_globals(monkeypatch):
     assert interactive_runtime._original_stderr is None
     assert interactive_runtime._original_print is None
     assert interactive_runtime._print_buffers == {}
+
+
+def test_capture_callable_output_suppresses_thread_logs_after_handler_reconfigure():
+    import logging
+
+    class ClosedStream(io.StringIO):
+        def write(self, value):  # type: ignore[override]
+            raise ValueError('I/O operation on closed file.')
+
+    logger = logging.getLogger('autodl-helper.capture-test')
+    logger.handlers.clear()
+    logger.propagate = True
+    root_logger = logging.getLogger()
+    previous_handlers = list(root_logger.handlers)
+    bad_handler = logging.StreamHandler(ClosedStream())
+    bad_handler.setLevel(logging.INFO)
+
+    def action():
+        root_logger.handlers[:] = [bad_handler]
+        logger.info('hidden-thread-log')
+        return 'ok'
+
+    try:
+        result, output = interactive_runtime.capture_callable_output(action)
+    finally:
+        root_logger.handlers[:] = previous_handlers
+        bad_handler.close()
+
+    assert result == 'ok'
+    assert 'Logging error' not in output
+    assert 'hidden-thread-log' not in output
