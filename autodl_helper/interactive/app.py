@@ -8,12 +8,9 @@ import json
 import logging
 import os
 import re
-import select
 import sys
-import termios
 import threading
 import time
-import tty
 from dataclasses import asdict, dataclass, is_dataclass
 from datetime import datetime, timedelta
 from types import SimpleNamespace
@@ -44,6 +41,7 @@ from autodl_helper.services.manager import service_status as _service_status
 from autodl_helper.services.manager import start_service as _start_service
 from autodl_helper.services.manager import stop_service as _stop_service
 
+from . import dialogs as _dialogs
 from .dialogs import (
     MenuItem,
     _InteractiveCancel,
@@ -72,6 +70,14 @@ from .dialogs import (
     _update_menu_selection,
     _update_menu_title,
 )
+
+# Backward-compatible monkeypatch anchors used by older tests and integrations.
+# Keep these as aliases to dialogs' platform-aware imports; on Windows termios/tty
+# are intentionally None so importing interactive.app still works.
+select = _dialogs.select
+termios = _dialogs.termios
+tty = _dialogs.tty
+
 from .presentation import (
     BLUE,
     CYAN,

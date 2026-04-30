@@ -4,16 +4,37 @@
 
 ## Local setup
 
+macOS / Linux:
+
 ```bash
-python --version
-python -m pip install -r requirements-dev.txt
-playwright install chromium
+python3 -m venv .venv
+./.venv/bin/python --version
+./.venv/bin/python -m pip install -r requirements-dev.txt
+./.venv/bin/playwright install chromium
 ```
+
+Windows PowerShell:
+
+```powershell
+py -m venv .venv
+.\.venv\Scripts\python --version
+.\.venv\Scripts\python -m pip install -r requirements-dev.txt
+.\.venv\Scripts\playwright install chromium
+```
+
+macOS/Homebrew Python uses PEP 668 and blocks system-wide `pip install`.
+Use the project virtual environment instead of system `python3 -m pip`.
 
 如果你更偏向包管理方式，也可以：
 
 ```bash
-python -m pip install -e .[dev]
+./.venv/bin/python -m pip install -e .[dev]
+```
+
+Windows PowerShell:
+
+```powershell
+.\.venv\Scripts\python -m pip install -e .[dev]
 ```
 
 ## Common development commands
@@ -21,19 +42,19 @@ python -m pip install -e .[dev]
 ### Run tests
 
 ```bash
-python -m pytest -q
+./.venv/bin/python -m pytest -q
 ```
 
 ### Compile check
 
 ```bash
-python -m py_compile $(find autodl_helper -name '*.py')
+./.venv/bin/python -m py_compile $(find autodl_helper -name '*.py')
 ```
 
 ### Lint
 
 ```bash
-python -m ruff check .
+./.venv/bin/python -m ruff check .
 ```
 
 当前 lint 只接入一层**保守门禁**，主要用于发现：
@@ -49,13 +70,13 @@ python -m ruff check .
 ### Interactive
 
 ```bash
-python main.py interactive --config config.yaml
+./.venv/bin/python main.py interactive --config config.yaml
 ```
 
 ### Daemon
 
 ```bash
-python main.py run-daemon --config config.yaml
+./.venv/bin/python main.py run-daemon --config config.yaml
 ```
 
 ### Service management
@@ -67,16 +88,16 @@ python main.py run-daemon --config config.yaml
 通用命令如下：
 
 ```bash
-python main.py service-install --config config.yaml
-python main.py service-start --config config.yaml
-python main.py service-status --config config.yaml
-python main.py service-stop --config config.yaml
-python main.py service-restart --config config.yaml
+./.venv/bin/python main.py service-install --config config.yaml
+./.venv/bin/python main.py service-start --config config.yaml
+./.venv/bin/python main.py service-status --config config.yaml
+./.venv/bin/python main.py service-stop --config config.yaml
+./.venv/bin/python main.py service-restart --config config.yaml
 ```
 
 ## Suggested workflow
 
-1. 先执行 `python main.py init` 生成本地 `.env` 和 `config.yaml`
+1. 先执行 `./.venv/bin/python main.py init` 生成本地 `.env` 和 `config.yaml`
 2. 再按需修改 `.env` / `config.yaml`
 3. 先跑：
    - `pytest -q`

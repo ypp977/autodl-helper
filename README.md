@@ -76,29 +76,69 @@ cd autodl-helper
 
 ### 2. Install dependencies
 
+macOS / Linux:
+
 ```bash
-python -m pip install -r requirements.txt
-playwright install chromium
+python3 -m venv .venv
+./.venv/bin/python -m pip install -r requirements.txt
+./.venv/bin/playwright install chromium
 ```
+
+Windows PowerShell:
+
+```powershell
+py -m venv .venv
+.\.venv\Scripts\python -m pip install -r requirements.txt
+.\.venv\Scripts\playwright install chromium
+```
+
+On macOS with Homebrew Python, always use the virtual environment commands above.
+Installing with system `python3 -m pip` may fail with `externally-managed-environment`.
 
 ### 3. Bootstrap local files
 
+macOS / Linux:
+
 ```bash
-python main.py init
+./.venv/bin/python main.py init
+```
+
+Windows PowerShell:
+
+```powershell
+.\.venv\Scripts\python main.py init
 ```
 
 This opens the first-run bootstrap wizard: it checks the local environment, creates local `.env` and `config.yaml` from templates, validates the config, and can jump into `interactive` directly.
 
 ### 4. Run
 
+macOS / Linux:
+
 ```bash
-python main.py interactive --config config.yaml
+./.venv/bin/python main.py interactive --config config.yaml
+```
+
+Windows PowerShell:
+
+```powershell
+.\.venv\Scripts\python main.py interactive --config config.yaml
 ```
 
 也可以作为本地包安装：
 
+macOS / Linux:
+
 ```bash
-python -m pip install -e .[dev]
+./.venv/bin/python -m pip install -e .[dev]
+autodl-helper init
+autodl-helper --help
+```
+
+Windows PowerShell:
+
+```powershell
+.\.venv\Scripts\python -m pip install -e .[dev]
 autodl-helper init
 autodl-helper --help
 ```

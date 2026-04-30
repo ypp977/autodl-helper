@@ -5,11 +5,16 @@ import os
 import re
 import select
 import sys
-import termios
 import time
-import tty
 from dataclasses import dataclass
 from typing import Any, Callable
+
+try:
+    import termios
+    import tty
+except ImportError:  # pragma: no cover - exercised on Windows
+    termios = None
+    tty = None
 
 from autodl_helper.config import KeeperSettings, ScheduledStartJob, ScheduledStartSelector
 from .presentation import (
@@ -47,7 +52,7 @@ class _InteractiveCancel(Exception):
 def _prompt(text: str) -> str:
     _delegate('_show_cursor')()
     try:
-        if sys.stdin.isatty():
+        if termios is not None and sys.stdin.isatty():
             try:
                 termios.tcflush(sys.stdin.fileno(), termios.TCIFLUSH)
             except Exception:
@@ -80,7 +85,7 @@ class MenuItem:
 
 
 def _supports_arrow_menu() -> bool:
-    return sys.stdin.isatty() and sys.stdout.isatty()
+    return termios is not None and tty is not None and sys.stdin.isatty() and sys.stdout.isatty()
 
 
 def _read_fd_char(fd: int) -> str:
@@ -140,6 +145,8 @@ def _read_escape_sequence_with_deadline(
 
 
 def _read_menu_key() -> str:
+    if termios is None or tty is None:
+        return (_delegate('_prompt')('选择: ') or '').strip()
     fd = sys.stdin.fileno()
     previous = termios.tcgetattr(fd)
     try:
@@ -155,6 +162,10 @@ def _read_menu_key() -> str:
 
 
 def _read_key_with_timeout(timeout_seconds: float | None) -> str | None:
+    if termios is None or tty is None:
+        if timeout_seconds is None:
+            return (_delegate('_prompt')('选择: ') or '').strip()
+        return None
     fd = sys.stdin.fileno()
     previous = termios.tcgetattr(fd)
     try:

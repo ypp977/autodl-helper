@@ -190,7 +190,11 @@ def run_single_login_attempt(
         from playwright.sync_api import sync_playwright
     except ImportError as exc:
         raise auth_error_cls(
-            "缺少 playwright 依赖，请先执行 pip install -r requirements.txt 并运行 playwright install chromium"
+            "缺少 playwright 依赖，请先在项目虚拟环境中安装依赖并安装 Chromium。"
+            "macOS/Linux: ./.venv/bin/python -m pip install -r requirements.txt && "
+            "./.venv/bin/playwright install chromium；Windows PowerShell: "
+            ".\\.venv\\Scripts\\python -m pip install -r requirements.txt；"
+            ".\\.venv\\Scripts\\playwright install chromium"
         ) from exc
 
     captured: dict[str, Optional[str]] = {"token": None}

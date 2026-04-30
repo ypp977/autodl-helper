@@ -9,12 +9,9 @@ import json
 import logging
 import os
 import re
-import select
 import sys
-import termios
 import threading
 import time
-import tty
 from datetime import datetime, timedelta
 from dataclasses import asdict, dataclass, is_dataclass
 from types import SimpleNamespace
