@@ -20,7 +20,7 @@
 - 配置说明：`docs/CONFIGURATION.md`
 - 命令说明：`docs/COMMANDS.md`
 - 服务托管说明：`docs/SERVICE.md`
-- 架构说明：`docs/ARCHITECTURE.md`
+- 架构说明：`docs/architecture.md`
 - 开发指南：`docs/DEVELOPMENT.md`
 - 隐私与数据说明：`docs/PRIVACY.md`
 - 排障手册：`docs/TROUBLESHOOTING.md`
@@ -210,7 +210,7 @@ python main.py service-uninstall --config config.yaml
 
 完整架构说明见：
 
-- `docs/ARCHITECTURE.md`
+- `docs/architecture.md`
 
 ```text
 autodl_helper/
@@ -270,7 +270,7 @@ python -m py_compile $(find autodl_helper -name '*.py')
 - `docs/TROUBLESHOOTING.md`
 - `docs/CONFIGURATION.md`
 - `docs/COMMANDS.md`
-- `docs/ARCHITECTURE.md`
+- `docs/architecture.md`
 
 ## Limitations
 

@@ -240,12 +240,20 @@ class DummyStore:
     def __init__(self, executed=False):
         self.executed = executed
         self.history = []
+        self.task_controls = []
+        self.events = []
 
     def was_keeper_executed_in_cycle(self, account_name, instance_id, release_deadline):
         return self.executed
 
     def add_keeper_history(self, account_name, instance_id, release_deadline, result, reason, payload):
         self.history.append((account_name, instance_id, release_deadline, result, reason, payload))
+
+    def set_task_control(self, account_name, task_type, *, enabled, source):
+        self.task_controls.append((account_name, task_type, enabled, source))
+
+    def add_event(self, account_name, task_type, level, message, *, payload=None):
+        self.events.append((account_name, task_type, level, message, payload or {}))
 
 
 def test_run_keeper_cycle_skips_already_executed_release_cycle(monkeypatch):
@@ -298,6 +306,114 @@ def test_run_keeper_cycle_records_failed_attempt_but_allows_retry(monkeypatch):
     assert processed[0].result == 'keeper_failed_power_on'
     assert store.history[0][3] == 'keeper_failed_power_on'
 
+
+
+
+def test_run_keeper_cycle_triggers_stop_loss_and_circuit_breaker_on_power_off_timeout(monkeypatch, caplog):
+    client = DummyClient([
+        {
+            'uuid': 'iid-timeout',
+            'status': 'shutdown',
+            'stopped_at': {'Time': '2026-04-01T10:00:00+08:00', 'Valid': True},
+        },
+        {
+            'uuid': 'iid-later',
+            'status': 'shutdown',
+            'stopped_at': {'Time': '2026-04-01T11:00:00+08:00', 'Valid': True},
+        },
+    ])
+    store = DummyStore(executed=False)
+    monkeypatch.setattr(keeper.time, 'sleep', lambda *_args, **_kwargs: None)
+
+    attempts = []
+
+    def fake_call_with_timeout(*, operation_name, instance_id, timeout_seconds, fn):
+        attempts.append((operation_name, instance_id, timeout_seconds))
+        if operation_name == 'power_on':
+            return {'status': 'success', 'value': True, 'elapsed_seconds': 0.1, 'timeout_seconds': timeout_seconds}
+        if operation_name == 'power_off':
+            return {'status': 'timeout', 'elapsed_seconds': 1.0, 'timeout_seconds': timeout_seconds}
+        if operation_name == 'stop_loss_power_off':
+            return {'status': 'success', 'value': True, 'elapsed_seconds': 0.2, 'timeout_seconds': timeout_seconds}
+        raise AssertionError(operation_name)
+
+    monkeypatch.setattr(keeper, '_call_with_timeout', fake_call_with_timeout)
+    caplog.set_level('WARNING')
+
+    processed = keeper.run_keeper_cycle(
+        client=client,
+        shutdown_release_after_hours=24 * 15,
+        keeper_trigger_before_hours=6,
+        now=datetime(2026, 4, 16, 20, 0, 0),
+        store=store,
+        account_name='main',
+        power_on_timeout_seconds=5,
+        power_off_timeout_seconds=7,
+    )
+
+    assert [item.instance_id for item in processed] == ['iid-timeout']
+    assert processed[0].result == 'keeper_failed_power_off'
+    assert processed[0].reason == 'power_off_timeout'
+    payload = store.history[0][-1]
+    assert payload['guard_action'] == 'stop_loss_power_off'
+    assert payload['guard_status'] == 'success'
+    assert payload['circuit_breaker'] == 'open'
+    assert store.task_controls == [('main', 'keeper', False, 'keeper_guard')]
+    assert store.events[0][1] == 'keeper'
+    assert store.events[0][4]['action'] == 'keeper.circuit_open'
+    assert ('power_on', 'iid-timeout', 5) in attempts
+    assert ('power_off', 'iid-timeout', 7) in attempts
+    assert ('stop_loss_power_off', 'iid-timeout', 7) in attempts
+    assert '关机超时，已触发止损关机并开启熔断' in caplog.text
+    assert 'keeper熔断保持开启' in caplog.text
+
+
+def test_run_keeper_cycle_triggers_stop_loss_on_power_on_exception(monkeypatch, caplog):
+    client = DummyClient([
+        {
+            'uuid': 'iid-open-exc',
+            'status': 'shutdown',
+            'stopped_at': {'Time': '2026-04-01T10:00:00+08:00', 'Valid': True},
+        },
+    ])
+    store = DummyStore(executed=False)
+    monkeypatch.setattr(keeper.time, 'sleep', lambda *_args, **_kwargs: None)
+
+    def fake_call_with_timeout(*, operation_name, instance_id, timeout_seconds, fn):
+        if operation_name == 'power_on':
+            return {
+                'status': 'exception',
+                'elapsed_seconds': 0.1,
+                'timeout_seconds': timeout_seconds,
+                'error': RuntimeError('boom'),
+            }
+        if operation_name == 'stop_loss_power_off':
+            return {'status': 'success', 'value': False, 'elapsed_seconds': 0.2, 'timeout_seconds': timeout_seconds}
+        raise AssertionError(operation_name)
+
+    monkeypatch.setattr(keeper, '_call_with_timeout', fake_call_with_timeout)
+    caplog.set_level('ERROR')
+
+    processed = keeper.run_keeper_cycle(
+        client=client,
+        shutdown_release_after_hours=24 * 15,
+        keeper_trigger_before_hours=6,
+        now=datetime(2026, 4, 16, 20, 0, 0),
+        store=store,
+        account_name='main',
+        power_on_timeout_seconds=5,
+        power_off_timeout_seconds=7,
+    )
+
+    assert processed[0].result == 'keeper_failed_power_on'
+    assert processed[0].reason == 'power_on_exception'
+    payload = store.history[0][-1]
+    assert payload['guard_action'] == 'stop_loss_power_off'
+    assert payload['guard_status'] == 'failed'
+    assert payload['circuit_breaker'] == 'open'
+    assert store.task_controls == [('main', 'keeper', False, 'keeper_guard')]
+    assert store.events[0][4]['trigger'] == 'power_on_exception'
+    assert '开机异常，已触发止损关机并开启熔断' in caplog.text
 
 def test_run_keeper_cycle_writes_same_batch_id_for_single_execution(monkeypatch):
     client = DummyClient([

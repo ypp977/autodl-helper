@@ -39,6 +39,7 @@ dependencies = [
 [project.optional-dependencies]
 dev = [
   "pytest",
+  "import-linter>=2.0",
   "ruff>=0.15.0",
 ]
 
