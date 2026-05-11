@@ -1,0 +1,11 @@
+services:
+  autodl-helper:
+    build: .
+    image: autodl-helper:local
+    restart: unless-stopped
+    command: ["autodl-helper", "run", "daemon", "--config", "/app/config.yaml"]
+    volumes:
+      - ./config.yaml:/app/config.yaml:ro
+      - ./data:/app/data
+      - ./logs:/app/logs
+      - ./.cache:/app/.cache

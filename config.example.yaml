@@ -50,14 +50,16 @@ tasks:
     poll_interval_seconds: 5
     jobs:
       # 例 1：固定实例
-      - instance_id: "<your-instance-id>"
+      - enabled: true
+        instance_id: "<your-instance-id>"
         name: "daily-fixed-instance"
         target_time: "14:00"
         advance_hours: 2
         timezone: "Asia/Shanghai"
 
       # 例 2：按筛选条件抢机
-      - name: "daily-selector-job"
+      - enabled: true
+        name: "daily-selector-job"
         target_time: "20:00"
         advance_hours: 1
         timezone: "Asia/Shanghai"
