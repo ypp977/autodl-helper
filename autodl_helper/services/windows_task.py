@@ -6,9 +6,8 @@ from pathlib import Path
 from .base import (
     DEFAULT_SERVICE_LABEL,
     RunCommand,
+    build_daemon_command_args,
     build_service_status,
-    default_main_path,
-    default_python_path,
     ensure_service_logs_dir,
     resolve_config_path,
     run_command_safe,
@@ -21,7 +20,7 @@ TASK_NAME = DEFAULT_SERVICE_LABEL
 def build_task_command(*, config_path: str | Path) -> str:
     config = resolve_config_path(config_path)
     ensure_service_logs_dir(config)
-    return f'\"{default_python_path()}\" \"{default_main_path()}\" run-daemon --config \"{config}\"'
+    return subprocess.list2cmdline(build_daemon_command_args(config))
 
 
 def _query_task(*, run_command: RunCommand = subprocess.run) -> subprocess.CompletedProcess[str]:

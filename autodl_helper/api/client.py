@@ -38,6 +38,8 @@ class AutoDLClient:
     session: Any = field(default_factory=requests.Session)
     auth_refresh_callback: Callable[[], str] | None = None
     auth_failure_event_callback: Callable[[dict[str, Any]], None] | None = None
+    last_power_on_response: dict[str, Any] = field(default_factory=dict, init=False, repr=False)
+    last_power_off_response: dict[str, Any] = field(default_factory=dict, init=False, repr=False)
 
     def _refresh_authorization(self) -> bool:
         if self.auth_refresh_callback is None:
@@ -90,12 +92,14 @@ class AutoDLClient:
     def open_machine(self, instance_uuid: str, payload: str = "non_gpu") -> bool:
         body = {"instance_uuid": str(instance_uuid), "payload": payload}
         result = self.post_json(POWER_ON_URL, body)
+        self.last_power_on_response = result
         logger.info("uuid=%s power_on response=%s", instance_uuid, result)
         return result.get("code") == "Success"
 
     def close_machine(self, instance_uuid: str) -> bool:
         payload = {"instance_uuid": str(instance_uuid)}
         result = self.post_json(POWER_OFF_URL, payload)
+        self.last_power_off_response = result
         logger.info("uuid=%s power_off response=%s", instance_uuid, result)
         return result.get("code") == "Success"
 

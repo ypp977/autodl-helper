@@ -22,6 +22,8 @@ class KeeperResult:
     eligible: bool
     result: str
     reason: str
+    response_code: str = ''
+    response_msg: str = ''
     event_type: str = ''
     severity: str = 'info'
     summary: str = ''

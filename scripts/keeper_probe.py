@@ -24,7 +24,7 @@ def format_probe_line(result, account_name: str = "", executed_in_cycle: bool = 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     settings = load_settings(args.config)
-    errors = validate_settings(settings, purpose='run-keeper')
+    errors = validate_settings(settings, purpose='run_keeper')
     if errors:
         for error in errors:
             print(error)

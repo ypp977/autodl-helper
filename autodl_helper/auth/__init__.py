@@ -1,6 +1,11 @@
-from __future__ import annotations
+from .errors import (
+    AUTH_CODE_SIGNALS,
+    AUTH_MESSAGE_SIGNALS,
+    classify_auth_signal,
+    extract_code_msg,
+    is_business_auth_failure,
+)
 
-from .errors import *
 import logging
 import sys
 import time

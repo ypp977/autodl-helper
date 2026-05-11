@@ -8,6 +8,7 @@ from typing import Any, Callable, Protocol
 DEFAULT_SERVICE_LABEL = 'autodl-helper'
 SERVICE_STDOUT_LOG_NAME = 'service.stdout.log'
 SERVICE_STDERR_LOG_NAME = 'service.stderr.log'
+DEFAULT_SERVICE_COMMAND = 'autodl-helper'
 RunCommand = Callable[..., subprocess.CompletedProcess[str]]
 
 
@@ -54,6 +55,24 @@ def default_main_path() -> Path:
 
 def default_python_path() -> str:
     return sys.executable
+
+
+def default_service_command() -> str:
+    return default_python_path()
+
+
+def build_daemon_command_args(config_path: str | Path, *, command: str | None = None) -> list[str]:
+    if command:
+        return [command, 'run', 'daemon', '--config', str(resolve_config_path(config_path))]
+    return [
+        default_service_command(),
+        '-m',
+        'autodl_helper',
+        'run',
+        'daemon',
+        '--config',
+        str(resolve_config_path(config_path)),
+    ]
 
 
 def normalize_status_label(*, installed: bool, running: bool, enabled: bool, detail: str = '') -> str:

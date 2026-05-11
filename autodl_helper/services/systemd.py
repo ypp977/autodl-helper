@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import subprocess
+import shlex
 from pathlib import Path
 from typing import Any
 
@@ -8,8 +9,7 @@ from .base import (
     DEFAULT_SERVICE_LABEL,
     RunCommand,
     build_service_status,
-    default_main_path,
-    default_python_path,
+    build_daemon_command_args,
     ensure_service_logs_dir,
     resolve_config_path,
     run_command_safe,
@@ -28,6 +28,7 @@ def build_systemd_unit(*, config_path: str | Path, label: str = DEFAULT_SERVICE_
     logs_dir = ensure_service_logs_dir(config)
     stdout_path = logs_dir / 'service.stdout.log'
     stderr_path = logs_dir / 'service.stderr.log'
+    daemon_command = ' '.join(shlex.quote(part) for part in build_daemon_command_args(config))
     return '\n'.join([
         '[Unit]',
         f'Description={label} daemon',
@@ -36,7 +37,7 @@ def build_systemd_unit(*, config_path: str | Path, label: str = DEFAULT_SERVICE_
         '[Service]',
         'Type=simple',
         f'WorkingDirectory={config.parent}',
-        f'ExecStart={default_python_path()} {default_main_path()} run-daemon --config {config}',
+        f'ExecStart={daemon_command}',
         'Restart=always',
         'RestartSec=10',
         f'StandardOutput=append:{stdout_path}',

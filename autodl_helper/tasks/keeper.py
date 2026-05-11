@@ -9,9 +9,9 @@ from typing import Any, Callable
 from datetime import datetime, timedelta
 from uuid import uuid4
 
-from autodl_helper.api import ASIA_SHANGHAI
+from autodl_helper.core.api import ASIA_SHANGHAI
 from autodl_helper.events import enrich_keeper_result
-from autodl_helper.models import KeeperResult
+from autodl_helper.core.models import KeeperResult
 
 logger = logging.getLogger(__name__)
 
@@ -541,7 +541,17 @@ def run_keeper_cycle(
                     trigger='power_on_exception',
                 )
             elif not power_on_attempt.get('value'):
-                result = enrich_keeper_result(replace(result, eligible=False, result='keeper_failed_power_on', reason='power_on_failed'))
+                response_payload = getattr(client, 'last_power_on_response', {}) or {}
+                response_code = str(response_payload.get('code', '') or '')
+                response_msg = str(response_payload.get('msg', '') or '')
+                result = enrich_keeper_result(replace(
+                    result,
+                    eligible=False,
+                    result='keeper_failed_power_on',
+                    reason='power_on_failed',
+                    response_code=response_code,
+                    response_msg=response_msg,
+                ))
             else:
                 time.sleep(power_on_wait_seconds)
 
