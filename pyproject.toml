@@ -41,6 +41,7 @@ dev = [
   "pytest",
   "import-linter>=2.0",
   "ruff>=0.15.0",
+  "Nuitka>=2.6",
 ]
 
 [project.urls]
