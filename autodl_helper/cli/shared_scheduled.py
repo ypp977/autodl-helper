@@ -64,6 +64,16 @@ def _format_keeper_window(*, next_keeper_time: str, release_deadline: str) -> st
     return f'{start} ~ {end}'
 
 
+def _format_schedule_label(schedule_mode: str, weekdays: list[int] | None = None) -> str:
+    if schedule_mode == 'once':
+        return '单次'
+    if schedule_mode == 'weekly':
+        labels = {1: '周一', 2: '周二', 3: '周三', 4: '周四', 5: '周五', 6: '周六', 7: '周日'}
+        days = ','.join(labels.get(int(day), str(day)) for day in sorted(set(weekdays or [])))
+        return f'每周{days}' if days else '每周'
+    return '每天'
+
+
 def _log_scheduled_start_summary(
     *,
     account_name: str,
@@ -71,6 +81,7 @@ def _log_scheduled_start_summary(
     target_time: str,
     advance_hours: int,
     schedule_mode: str,
+    weekdays: list[int] | None = None,
     poll_interval_seconds: int,
     status: str,
     reason: str,
@@ -97,7 +108,7 @@ def _log_scheduled_start_summary(
         f'账号={account_name}',
         f'任务={job_name}',
         f'目标={target_time}',
-        f'计划={"单次" if schedule_mode == "once" else "每天"}',
+        f'计划={_format_schedule_label(schedule_mode, weekdays)}',
         f'间隔={poll_interval_seconds}秒',
         f'当前窗口={_format_scheduled_window(target_time=target_time, advance_hours=advance_hours, now=now)}',
         f'下次检查={_format_next_check(now=now, poll_interval_seconds=poll_interval_seconds)}',

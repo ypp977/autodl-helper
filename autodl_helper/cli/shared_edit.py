@@ -4,7 +4,7 @@ import argparse
 from dataclasses import asdict
 from typing import Any
 
-from autodl_helper.config import Settings
+from autodl_helper.core.config import Settings
 
 
 def _has_config_edit_args(args: argparse.Namespace) -> bool:
@@ -116,6 +116,8 @@ def _select_job_payloads(payload: dict[str, Any], settings: Settings, job_name: 
                     'name': job.name,
                     'target_time': job.target_time,
                     'advance_hours': job.advance_hours,
+                    'schedule_mode': job.schedule_mode,
+                    'weekdays': list(getattr(job, 'weekdays', []) or []),
                     'timezone': job.timezone,
                     **({'selector': asdict(job.selector)} if job.selector is not None else {}),
                     **({'priority': [asdict(item) for item in job.priority]} if job.priority else {}),

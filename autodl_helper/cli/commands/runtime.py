@@ -16,27 +16,10 @@ from typing import Any, Callable, Sequence, TextIO
 
 from apscheduler.schedulers.blocking import BlockingScheduler
 
-from autodl_helper.api import AutoDLClient
-from autodl_helper.auth import AuthError, alert_auth_failure, inspect_auth_state, resolve_authorization
-from autodl_helper.auth_policy import resolve_auth_runtime_policy
-from autodl_helper.config import AccountSettings, LIGHTWEIGHT_MODES, NotificationSettings, Settings, load_settings, read_raw_settings, write_raw_settings
-from autodl_helper.interactive_actions import (
-    auth_panel_rows,
-    build_dashboard_view,
-    clear_runtime_controls,
-    history_panel_rows,
-    keeper_probe_rows,
-    list_instances_panel_rows,
-    request_reload,
-    scheduled_candidate_panel_data,
-    scheduled_job_status_rows,
-    runtime_controls_snapshot,
-    set_job_enabled,
-    set_job_override,
-    set_task_enabled,
-)
-from autodl_helper.interactive_app import run_interactive
-from autodl_helper.interactive_views import render_candidate_explanation, render_dashboard
+from autodl_helper.core.api import AutoDLClient
+from autodl_helper.core.auth import AuthError, alert_auth_failure, inspect_auth_state, resolve_authorization
+from autodl_helper.core.auth import resolve_auth_runtime_policy
+from autodl_helper.core.config import AccountSettings, LIGHTWEIGHT_MODES, NotificationSettings, Settings, load_settings, read_raw_settings, write_raw_settings
 from autodl_helper.lock import FileLock, LockAcquisitionError
 from autodl_helper.notify import EmailNotifier, NotificationManager, PushPlusNotifier, ServerChanNotifier
 from autodl_helper.runtime_control import (
@@ -55,7 +38,7 @@ from autodl_helper.runtime_control import (
     scheduled_job_signature,
     task_due,
 )
-from autodl_helper.service_launchd import append_service_lifecycle_log
+from autodl_helper.services.launchd import append_service_lifecycle_log
 from autodl_helper.services.manager import (
     install_service,
     restart_service,
@@ -65,7 +48,7 @@ from autodl_helper.services.manager import (
     uninstall_service,
 )
 from autodl_helper.state import StateStore
-from autodl_helper.storage import SQLiteStore
+from autodl_helper.core.store import SQLiteStore
 from autodl_helper.tasks.keeper import evaluate_keeper_instance, format_duration_seconds, run_keeper_cycle
 from autodl_helper.tasks.scheduled_start import ScheduledStartJobRuntime, run_scheduled_start_job
 
@@ -75,29 +58,46 @@ DAEMON_HEARTBEAT_INTERVAL_SECONDS = 30
 
 
 
-from ..shared import *  # noqa: F401,F403
-from .config import _maybe_reload_daemon_settings
-
-def _delegate(name: str, fallback):
-    class _Proxy:
-        def _target(self):
-            import sys
-            module = sys.modules.get("autodl_helper.cli.handlers")
-            if module is not None:
-                target = getattr(module, name, None)
-                if target is not None and target is not self:
-                    return target
-            return fallback
-
-        def __call__(self, *args, **kwargs):
-            return self._target()(*args, **kwargs)
-
-        def __getattr__(self, attr):
-            return getattr(self._target(), attr)
-
-    return _Proxy()
-
-datetime = _delegate('datetime', datetime)
+from ..shared import (
+    get_enabled_accounts,
+    select_accounts,
+    create_store,
+    _account_status_label,
+    _account_source_label,
+    account_status_rows,
+    record_auth_event,
+    create_client,
+    build_client,
+    _has_config_edit_args,
+    _prompt_optional_text,
+    _prompt_optional_int,
+    _prompt_optional_bool,
+    collect_config_edit_args,
+    _ensure_account_payloads,
+    _select_account_payloads,
+    _ensure_task_payload,
+    _select_job_payloads,
+    compute_cycle_interval_seconds,
+    compute_dispatch_interval_seconds,
+    compute_interval_for_mode,
+    _sync_primary_auth,
+    _resolve_account_override_targets,
+    _resolve_job_override_targets,
+    apply_cli_overrides,
+    serialize_settings,
+    validate_settings,
+    build_named_notifiers,
+    build_notifiers,
+    probe_path_writable,
+    collect_healthcheck_errors,
+    _scheduled_start_reason_label,
+    _format_scheduled_window,
+    _format_next_check,
+    _format_local_time_label,
+    _format_keeper_window,
+    _log_scheduled_start_summary,
+)
+from .config_runtime import _maybe_reload_daemon_settings
 
 
 
@@ -146,6 +146,8 @@ def run_scheduled_start_cycle(
                     instance_id=job.instance_id,
                     target_time=job.target_time,
                     advance_hours=job.advance_hours,
+                    schedule_mode=str(getattr(job, 'schedule_mode', 'daily') or 'daily'),
+                    weekdays=list(getattr(job, 'weekdays', []) or []),
                     timezone=job.timezone,
                     poll_interval_seconds=settings.tasks.scheduled_start.poll_interval_seconds,
                     selector=job.selector,
@@ -176,6 +178,7 @@ def run_scheduled_start_cycle(
                         target_time=job.target_time,
                         advance_hours=int(job.advance_hours or 0),
                         schedule_mode=str(getattr(job, 'schedule_mode', 'daily') or 'daily'),
+                        weekdays=list(getattr(job, 'weekdays', []) or []),
                         poll_interval_seconds=settings.tasks.scheduled_start.poll_interval_seconds,
                         status='skip',
                         reason='window_already_succeeded',
@@ -197,6 +200,7 @@ def run_scheduled_start_cycle(
                         'job_instance_id': str(job.instance_id or ''),
                         'advance_hours': int(job.advance_hours or 0),
                         'schedule_mode': str(getattr(job, 'schedule_mode', 'daily') or 'daily'),
+                        'weekdays': list(getattr(job, 'weekdays', []) or []),
                         'timezone': str(getattr(job, 'timezone', 'Asia/Shanghai') or 'Asia/Shanghai'),
                         'selector': {
                             'regions': list(job.selector.regions or []),
@@ -233,6 +237,7 @@ def run_scheduled_start_cycle(
                     target_time=job.target_time,
                     advance_hours=int(job.advance_hours or 0),
                     schedule_mode=str(getattr(job, 'schedule_mode', 'daily') or 'daily'),
+                    weekdays=list(getattr(job, 'weekdays', []) or []),
                     poll_interval_seconds=settings.tasks.scheduled_start.poll_interval_seconds,
                     status=str(result.result or ''),
                     reason=str(result.reason or ''),
