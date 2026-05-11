@@ -97,11 +97,13 @@ class ScheduledStartPriority:
 
 @dataclass
 class ScheduledStartJob:
+    enabled: bool = True
     instance_id: str = ""
     name: str = ""
     target_time: str = "14:00"
     advance_hours: int = 2
     schedule_mode: str = "daily"
+    weekdays: list[int] = field(default_factory=list)
     timezone: str = "Asia/Shanghai"
     selector: ScheduledStartSelector | None = None
     priority: list[ScheduledStartPriority] = field(default_factory=list)
@@ -202,11 +204,13 @@ def _parse_scheduled_job(job: dict[str, Any]) -> ScheduledStartJob:
     selector = ScheduledStartSelector(**selector_payload) if selector_payload else None
     priority = [ScheduledStartPriority(**item) for item in job.get("priority", [])]
     return ScheduledStartJob(
+        enabled=bool(job.get("enabled", True)),
         instance_id=job.get("instance_id", ""),
         name=job.get("name", ""),
         target_time=job.get("target_time", "14:00"),
         advance_hours=job.get("advance_hours", 2),
         schedule_mode=str(job.get("schedule_mode", "daily") or "daily"),
+        weekdays=[int(day) for day in (job.get("weekdays") or [])],
         timezone=job.get("timezone", "Asia/Shanghai"),
         selector=selector,
         priority=priority,

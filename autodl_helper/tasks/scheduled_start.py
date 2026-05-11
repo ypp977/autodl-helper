@@ -6,9 +6,9 @@ from dataclasses import dataclass, field
 from datetime import datetime, time, timedelta
 from zoneinfo import ZoneInfo
 
-from autodl_helper.config import ScheduledStartPriority, ScheduledStartSelector
+from autodl_helper.core.config import ScheduledStartPriority, ScheduledStartSelector
 from autodl_helper.events import enrich_scheduled_result
-from autodl_helper.models import ScheduledStartCandidateDetail, ScheduledStartResult
+from autodl_helper.core.models import ScheduledStartCandidateDetail, ScheduledStartResult
 from autodl_helper.state import StateStore
 
 logger = logging.getLogger(__name__)
@@ -21,18 +21,30 @@ class ScheduledStartJobRuntime:
     instance_id: str = ""
     target_time: str = "14:00"
     advance_hours: int = 2
+    schedule_mode: str = "daily"
+    weekdays: list[int] = field(default_factory=list)
     timezone: str = "Asia/Shanghai"
     poll_interval_seconds: int = 300
     selector: ScheduledStartSelector | None = None
     priority: list[ScheduledStartPriority] = field(default_factory=list)
 
     def window_key(self, now: datetime) -> str:
+        if self.schedule_mode == 'weekly':
+            iso = now.isocalendar()
+            return f'{iso.year}-W{iso.week:02d}-{now.isoweekday()}'
         return now.date().isoformat()
 
     def target_datetime(self, now: datetime) -> datetime:
         tz = ZoneInfo(self.timezone)
         hh, mm = map(int, self.target_time.split(':'))
         return datetime.combine(now.date(), time(hh, mm), tzinfo=tz)
+
+    def scheduled_today(self, now: datetime) -> bool:
+        if self.schedule_mode != 'weekly':
+            return True
+        if not self.weekdays:
+            return True
+        return now.isoweekday() in set(self.weekdays)
 
     def selector_summary(self) -> str:
         if self.selector is None:
@@ -357,6 +369,11 @@ def run_scheduled_start_job(
     target_dt = job.target_datetime(now)
     window_start = target_dt - timedelta(hours=job.advance_hours)
     key = job.window_key(now)
+
+    if not job.scheduled_today(now) and not force_run_now:
+        result = _build_result(job=job, result='outside_window', reason='not_scheduled_today', now=now)
+        _debug_log(result)
+        return result
 
     if now < window_start and not force_run_now:
         result = _build_result(job=job, result='outside_window', reason='outside_window', now=now)

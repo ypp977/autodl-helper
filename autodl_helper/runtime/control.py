@@ -76,6 +76,7 @@ def _normalize_job_signature_payload(
         'target_time': str(target_time if target_time is not None else job.target_time or ''),
         'advance_hours': int(advance_hours if advance_hours is not None else job.advance_hours or 0),
         'schedule_mode': str(getattr(job, 'schedule_mode', 'daily') or 'daily'),
+        'weekdays': list(getattr(job, 'weekdays', []) or []),
         'timezone': str(getattr(job, 'timezone', 'Asia/Shanghai') or 'Asia/Shanghai'),
         'selector': {
             'regions': list(getattr(selector, 'regions', []) or []),
@@ -108,6 +109,8 @@ def get_task_enabled(store: SQLiteStore, account_name: str, task_type: str, *, d
 def apply_runtime_controls_to_scheduled_jobs(store: SQLiteStore, account_name: str, jobs: list[ScheduledStartJob]) -> list[ScheduledStartJob]:
     effective: list[ScheduledStartJob] = []
     for job in jobs:
+        if not getattr(job, 'enabled', True):
+            continue
         key = scheduled_job_identity(job)
         control = store.get_scheduled_job_control(account_name, key)
         if control and not control['enabled']:

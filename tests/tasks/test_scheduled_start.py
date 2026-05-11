@@ -1,7 +1,7 @@
 import logging
 from datetime import datetime
 
-from autodl_helper.config import ScheduledStartPriority, ScheduledStartSelector
+from autodl_helper.core.config import ScheduledStartPriority, ScheduledStartSelector
 from autodl_helper.tasks import scheduled_start
 from autodl_helper.state import StateStore
 
@@ -56,6 +56,42 @@ def test_job_outside_window_does_nothing(tmp_path):
     )
     assert result == 'outside_window'
     assert result.event_type == 'scheduled.wait.window'
+
+
+def test_weekly_job_skips_non_matching_weekday(tmp_path):
+    client = DummyClient()
+    result = scheduled_start.run_scheduled_start_job(
+        client=client,
+        notifier=DummyNotifier(),
+        state_store=StateStore(tmp_path / 'state.json'),
+        job=scheduled_start.ScheduledStartJobRuntime(
+            job_name='weekly-gpu',
+            instance_id='iid',
+            target_time='14:00',
+            advance_hours=2,
+            schedule_mode='weekly',
+            weekdays=[3],
+            timezone='Asia/Shanghai',
+        ),
+        now=datetime(2026, 4, 7, 13, 0, 0),
+    )
+
+    assert result == 'outside_window'
+    assert result.reason == 'not_scheduled_today'
+    assert client.open_calls == []
+    assert client._list_calls == 0
+
+
+def test_weekly_job_window_key_includes_weekday():
+    job = scheduled_start.ScheduledStartJobRuntime(
+        job_name='weekly-gpu',
+        instance_id='iid',
+        schedule_mode='weekly',
+        weekdays=[1, 3, 5],
+    )
+
+    assert job.window_key(datetime(2026, 4, 6, 13, 0, 0)) == '2026-W15-1'
+    assert job.window_key(datetime(2026, 4, 8, 13, 0, 0)) == '2026-W15-3'
 
 
 

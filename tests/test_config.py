@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from autodl_helper import config
+from autodl_helper.core import config
 
 
 def test_load_settings_reads_yaml_jobs(tmp_path, monkeypatch):
@@ -49,14 +49,16 @@ def test_load_settings_reads_job_schedule_mode(tmp_path, monkeypatch):
             '      - name: job-once',
             '        target_time: "14:00"',
             '        advance_hours: 2',
-            '        schedule_mode: once',
+            '        schedule_mode: weekly',
+            '        weekdays: [1, 3, 5]',
         ])
     )
     monkeypatch.setenv('Authorization', 'Bearer token')
 
     settings = config.load_settings(yaml_path)
 
-    assert settings.tasks.scheduled_start.jobs[0].schedule_mode == 'once'
+    assert settings.tasks.scheduled_start.jobs[0].schedule_mode == 'weekly'
+    assert settings.tasks.scheduled_start.jobs[0].weekdays == [1, 3, 5]
 
 
 
