@@ -39,7 +39,7 @@ python -m autodl_helper --help
 
 ## Install
 
-### Option A: pipx
+推荐 `pipx` 或项目虚拟环境，避免 Homebrew Python 的 `externally-managed-environment` 限制。
 
 ```bash
 pipx install .
@@ -49,9 +49,7 @@ autodl-helper init
 autodl-helper ui --config config.yaml
 ```
 
-### Option B: venv
-
-macOS / Linux:
+从源码运行时：
 
 ```bash
 python3 -m venv .venv
@@ -61,59 +59,20 @@ python3 -m venv .venv
 ./.venv/bin/python main.py ui --config config.yaml
 ```
 
-Windows PowerShell:
-
-```powershell
-py -m venv .venv
-.\.venv\Scripts\python -m pip install -r requirements.txt
-.\.venv\Scripts\playwright install chromium
-.\.venv\Scripts\python main.py init
-.\.venv\Scripts\python main.py ui --config config.yaml
-```
-
-Homebrew Python may reject system-wide `python3 -m pip install` with `externally-managed-environment`; use `pipx` or `venv` instead.
-
-### Option C: Nuitka executable
-
-macOS:
-
-```bash
-./.venv/bin/python -m pip install -r requirements-dev.txt
-./scripts/build_nuitka_macos.sh
-./dist/nuitka-macos/autodl-helper --help
-```
-
-Windows PowerShell:
-
-```powershell
-.\.venv\Scripts\python -m pip install -r requirements-dev.txt
-.\scripts\build_nuitka_windows.ps1
-.\dist\nuitka-windows\autodl-helper.exe --help
-```
-
-Nuitka 只生成 CLI/daemon console executable；本轮不做 GUI、DMG、MSI、签名、公证。Playwright 浏览器缓存不打包进可执行文件，需要浏览器登录流程时请在目标机器单独安装 Chromium。
+Windows 把 `./.venv/bin/python` 换成 `.\.venv\Scripts\python`。Nuitka 可执行文件构建见 `docs/DEVELOPMENT.md`。
 
 ## Common commands
 
 ```bash
-autodl-helper init
-autodl-helper login --config config.yaml --account main
-autodl-helper list --config config.yaml
+autodl-helper ui --config config.yaml
 autodl-helper run daemon --config config.yaml
 autodl-helper run keeper --config config.yaml
-autodl-helper run scheduled --config config.yaml
-autodl-helper service install --config config.yaml
 autodl-helper service status --config config.yaml
-autodl-helper ui --config config.yaml
 autodl-helper debug health --config config.yaml
-autodl-helper debug db --config config.yaml
-autodl-helper debug auth --config config.yaml
-autodl-helper debug history --config config.yaml --limit 50
-autodl-helper config show --config config.yaml
-autodl-helper config validate --config config.example.yaml
+autodl-helper config validate --config config.yaml
 ```
 
-完整命令见 `docs/COMMANDS.md`。
+完整命令只维护在 `docs/COMMANDS.md`。
 
 ## Docker daemon
 

@@ -1,6 +1,6 @@
 # Commands
 
-`autodl-helper` exposes a small grouped CLI. The supported public entrypoints are:
+Public entrypoints:
 
 ```bash
 autodl-helper <command> [options]
@@ -8,35 +8,29 @@ python main.py <command> [options]
 python -m autodl_helper <command> [options]
 ```
 
-All examples below use `autodl-helper`; replace it with `python main.py` when running from source.
+Examples use `autodl-helper`; replace it with `python main.py` when running from source.
 
-## Bootstrap and auth
+## Quick reference
 
 ```bash
 autodl-helper init
-autodl-helper init --yes
-autodl-helper init --force
 autodl-helper login --config config.yaml --account main
 autodl-helper login --config config.yaml --all
-```
-
-## Instance list
-
-```bash
 autodl-helper list --config config.yaml
 autodl-helper list --config config.yaml --json
-```
-
-## Foreground runtime
-
-```bash
 autodl-helper run daemon --config config.yaml
 autodl-helper run daemon --config config.yaml --run-once
 autodl-helper run keeper --config config.yaml
 autodl-helper run scheduled --config config.yaml
+autodl-helper ui --config config.yaml
+autodl-helper service status --config config.yaml
+autodl-helper debug health --config config.yaml
+autodl-helper debug history --config config.yaml --limit 50
+autodl-helper config show --config config.yaml
+autodl-helper config validate --config config.yaml
 ```
 
-Common runtime options:
+## Runtime options
 
 - `--config`
 - `--headed`
@@ -44,16 +38,10 @@ Common runtime options:
 - `--state-file`
 - `--lock-file`
 - keeper overrides such as `--shutdown-release-after-hours`, `--keeper-trigger-before-hours`
-- scheduled overrides such as `--scheduled-job`, `--target-time`, `--advance-hours`
+- scheduled overrides such as `--scheduled-job`, `--target-time`, `--advance-hours`, `--schedule-mode`, `--weekdays`
 - auth overrides such as `--lightweight-mode`, `--runtime-auth-revalidate-seconds`
 
-## Background service
-
-The service backend is selected by platform:
-
-- macOS: LaunchAgent
-- Linux: systemd user service
-- Windows: Task Scheduler
+## Service
 
 ```bash
 autodl-helper service install --config config.yaml
@@ -64,19 +52,7 @@ autodl-helper service stop --config config.yaml
 autodl-helper service uninstall --config config.yaml
 ```
 
-Installed services run the daemon command:
-
-```bash
-autodl-helper run daemon --config <config-path>
-```
-
-## UI
-
-```bash
-autodl-helper ui --config config.yaml
-```
-
-The UI is a terminal menu for status overview, scheduled-start, keeper, service status, and basic diagnostics. Docker does not support UI mode.
+Backend is selected by platform: macOS LaunchAgent, Linux systemd user service, Windows Task Scheduler.
 
 ## Diagnostics
 
@@ -99,9 +75,9 @@ autodl-helper config validate --config config.yaml
 autodl-helper config validate --config config.example.yaml
 ```
 
-## Removed old aliases
+## Old aliases
 
-Internal compatibility command aliases are intentionally removed in the slim architecture. Use the grouped commands above:
+Use grouped commands instead of removed flat aliases:
 
 | Old command | New command |
 | --- | --- |

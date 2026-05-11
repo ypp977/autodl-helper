@@ -4,52 +4,15 @@
 
 ## Local setup
 
-### pipx install path
-
-用于验证接近日常用户的 CLI 安装方式：
-
-```bash
-pipx install .
-pipx inject autodl-helper playwright==1.58.0 --include-apps
-playwright install chromium
-autodl-helper init
-autodl-helper --help
-```
-
-### venv install path
-
-macOS / Linux:
-
 ```bash
 python3 -m venv .venv
 ./.venv/bin/python --version
 ./.venv/bin/python -m pip install -r requirements-dev.txt
 ./.venv/bin/playwright install chromium
+./.venv/bin/python main.py --help
 ```
 
-Windows PowerShell:
-
-```powershell
-py -m venv .venv
-.\.venv\Scripts\python --version
-.\.venv\Scripts\python -m pip install -r requirements-dev.txt
-.\.venv\Scripts\playwright install chromium
-```
-
-macOS/Homebrew Python uses PEP 668 and blocks system-wide `pip install`.
-Use the project virtual environment instead of system `python3 -m pip`.
-
-如果你更偏向包管理方式，也可以：
-
-```bash
-./.venv/bin/python -m pip install -e .[dev]
-```
-
-Windows PowerShell:
-
-```powershell
-.\.venv\Scripts\python -m pip install -e .[dev]
-```
+Windows 把 `python3` 换成 `py`，把 `./.venv/bin/python` 换成 `.\.venv\Scripts\python`。需要验证接近日常用户的安装方式时再使用 `pipx install .`。
 
 ### Nuitka executable path
 
@@ -80,22 +43,11 @@ python -m playwright install chromium
 
 ## Common development commands
 
-### Run tests
-
 ```bash
 ./.venv/bin/python -m pytest -q
-```
-
-### Compile check
-
-```bash
 ./.venv/bin/python -m py_compile $(find autodl_helper -name '*.py')
-```
-
-### Lint
-
-```bash
 ./.venv/bin/python -m ruff check .
+./.venv/bin/python -m importlinter
 ```
 
 当前 lint 只接入一层**保守门禁**，主要用于发现：
@@ -106,35 +58,17 @@ python -m playwright install chromium
 
 这一步是为了让开源仓库先具备稳定的基础门禁，而不是一次性推动大规模风格重构。
 
-## Run the app locally
-
-### Interactive
+## Run locally
 
 ```bash
 ./.venv/bin/python main.py ui --config config.yaml
-```
-
-### Daemon
-
-```bash
 ./.venv/bin/python main.py run daemon --config config.yaml
-```
-
-### Service management
-
-后台服务由当前操作系统自动选择后端。具体平台说明见：
-
-- `docs/SERVICE.md`
-
-通用命令如下：
-
-```bash
 ./.venv/bin/python main.py service install --config config.yaml
 ./.venv/bin/python main.py service start --config config.yaml
 ./.venv/bin/python main.py service status --config config.yaml
-./.venv/bin/python main.py service stop --config config.yaml
-./.venv/bin/python main.py service restart --config config.yaml
 ```
+
+服务托管说明以 `docs/SERVICE.md` 为准。
 
 ## Suggested workflow
 

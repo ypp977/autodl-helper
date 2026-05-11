@@ -32,4 +32,4 @@ Structure tests express this by keeping compatibility façades thin and by preve
 
 ## Removed legacy rule
 
-Old guardrails that referenced the legacy interactive shim module were removed. New rules target the current package boundaries (`interactive`, `cli.app`) instead of legacy shim names.
+Old guardrails that referenced the legacy interactive shim module were removed. New rules target the current package boundaries (`ui`, `cli.app`) instead of legacy shim names.
