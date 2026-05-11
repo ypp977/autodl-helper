@@ -4,6 +4,20 @@
 
 ## Local setup
 
+### pipx install path
+
+用于验证接近日常用户的 CLI 安装方式：
+
+```bash
+pipx install .
+pipx inject autodl-helper playwright==1.58.0 --include-apps
+playwright install chromium
+autodl-helper init
+autodl-helper --help
+```
+
+### venv install path
+
 macOS / Linux:
 
 ```bash
@@ -35,6 +49,33 @@ Windows PowerShell:
 
 ```powershell
 .\.venv\Scripts\python -m pip install -e .[dev]
+```
+
+### Nuitka executable path
+
+Nuitka 只用于生成平台本地 console executable；当前不做 DMG / MSI / GUI app / 代码签名。
+请在目标平台本机执行对应脚本，不做跨平台编译。
+
+macOS:
+
+```bash
+./.venv/bin/python -m pip install -r requirements-dev.txt
+./scripts/build_nuitka_macos.sh
+./dist/nuitka-macos/autodl-helper --help
+```
+
+Windows PowerShell:
+
+```powershell
+.\.venv\Scripts\python -m pip install -r requirements-dev.txt
+.\scripts\build_nuitka_windows.ps1
+.\dist\nuitka-windows\autodl-helper.exe --help
+```
+
+Playwright 浏览器缓存不会打包进 Nuitka 产物；需要浏览器登录流程时，在运行环境单独执行：
+
+```bash
+python -m playwright install chromium
 ```
 
 ## Common development commands
@@ -70,13 +111,13 @@ Windows PowerShell:
 ### Interactive
 
 ```bash
-./.venv/bin/python main.py interactive --config config.yaml
+./.venv/bin/python main.py ui --config config.yaml
 ```
 
 ### Daemon
 
 ```bash
-./.venv/bin/python main.py run-daemon --config config.yaml
+./.venv/bin/python main.py run daemon --config config.yaml
 ```
 
 ### Service management
@@ -88,11 +129,11 @@ Windows PowerShell:
 通用命令如下：
 
 ```bash
-./.venv/bin/python main.py service-install --config config.yaml
-./.venv/bin/python main.py service-start --config config.yaml
-./.venv/bin/python main.py service-status --config config.yaml
-./.venv/bin/python main.py service-stop --config config.yaml
-./.venv/bin/python main.py service-restart --config config.yaml
+./.venv/bin/python main.py service install --config config.yaml
+./.venv/bin/python main.py service start --config config.yaml
+./.venv/bin/python main.py service status --config config.yaml
+./.venv/bin/python main.py service stop --config config.yaml
+./.venv/bin/python main.py service restart --config config.yaml
 ```
 
 ## Suggested workflow
@@ -104,7 +145,7 @@ Windows PowerShell:
    - `ruff check .`
    - `py_compile`
 4. 再手动验证：
-   - interactive 页面
+   - ui 页面
    - keeper / scheduled-start
    - daemon 或 service 管理命令
 
@@ -125,7 +166,7 @@ Windows PowerShell:
 
 当前仓库已适合继续开源演进，但仍有两个现实点：
 
-1. `autodl_helper/interactive_app.py` 体积偏大  
+1. `autodl_helper/ui/app.py` 体积偏大  
    后续适合按页面或功能拆分渲染逻辑。
 
 2. 目前 lint 策略是保守接入  

@@ -1,80 +1,55 @@
 # autodl-helper
 
-`autodl-helper` 是一个面向 AutoDL 的 CLI-first 工具，提供：
+`autodl-helper` 是一个小而美的 AutoDL 自动化 CLI 工具，核心只做四件事：
 
-- 抢机轮询（scheduled-start）
-- Keeper 保活
-- 多账号运行控制
-- 本地 SQLite 历史与事件记录
-- 交互式终端控制台
-- 平台化后台托管（按操作系统自动选择后端）
+- scheduled-start 抢机轮询
+- Keeper 保活与止损
+- daemon 后台运行
+- 本地配置、日志、SQLite 历史与基础诊断
 
-当前定位：
+项目不提供 GUI 客户端。Docker 镜像只跑 daemon。macOS / Windows / Linux 推荐通过 `pipx`、`venv` 或 Nuitka console executable 使用。
 
-- 适合开发者自用
-- 适合二次开发
-- 适合作为开源 CLI / daemon 项目继续整理
+## Public entrypoints
+
+```bash
+autodl-helper --help
+python main.py --help
+python -m autodl_helper --help
+```
 
 ## Documentation
 
-- 配置说明：`docs/CONFIGURATION.md`
 - 命令说明：`docs/COMMANDS.md`
-- 服务托管说明：`docs/SERVICE.md`
-- 架构说明：`docs/architecture.md`
+- 配置说明：`docs/CONFIGURATION.md`
+- Docker：`docs/DOCKER.md`
+- 服务托管：`docs/SERVICE.md`
+- 架构瘦身规范：`docs/architecture-slimming.md`
 - 开发指南：`docs/DEVELOPMENT.md`
-- 隐私与数据说明：`docs/PRIVACY.md`
 - 排障手册：`docs/TROUBLESHOOTING.md`
-- 开源发布检查：`docs/OPEN_SOURCE_CHECKLIST.md`
-
-## Features
-
-- **scheduled-start 抢机**
-  - 固定实例开机
-  - 按 selector 条件轮询候选
-  - 支持单次 / 每天计划
-  - 支持优先级排序
-
-- **Keeper 保活**
-  - 根据释放时间推导接管窗口
-  - 支持冷却期和 fallback 策略
-  - 记录执行历史，避免同一释放周期重复保活
-
-- **多账号**
-  - 多账号配置
-  - 账号级缓存与运行态控制
-  - 支持后台统一调度
-
-- **可观测性**
-  - 本地 SQLite 历史
-  - daemon 心跳
-  - 配置热重载状态
-  - 交互式诊断页
-
-- **交互式 CLI**
-  - 查看抢机状态
-  - 查看 Keeper 计划
-  - 查看诊断信息
-  - 启停后台服务
 
 ## Platform support
 
-| Capability | macOS | Linux | Windows |
-| --- | --- | --- | --- |
-| CLI commands | ✅ | ✅ | ✅ |
-| `interactive` | ✅ | ✅ | ✅ |
-| `run-daemon` | ✅ | ✅ | ✅ |
-| `service-install/start/stop/restart/status/uninstall` | ✅ LaunchAgent | ✅ systemd user | ✅ Task Scheduler |
+| Capability | macOS | Linux | Windows | Docker |
+| --- | --- | --- | --- | --- |
+| CLI | ✅ | ✅ | ✅ | ✅ |
+| daemon | ✅ | ✅ | ✅ | ✅ |
+| service backend | LaunchAgent | systemd user | Task Scheduler | 不适用 |
+| terminal UI | ✅ | ✅ | ✅ | ❌ |
+| Nuitka executable | ✅ | 可自行构建 | ✅ | 不适用 |
 
-## Quick Start
+## Install
 
-### 1. Clone
+### Option A: pipx
 
 ```bash
-git clone https://github.com/ypp977/autodl-helper.git
-cd autodl-helper
+pipx install .
+pipx inject autodl-helper playwright==1.58.0 --include-apps
+playwright install chromium
+autodl-helper init
+autodl-helper ui --config config.yaml
 ```
 
-### 2. Install dependencies
+### Option B: venv
 
 macOS / Linux:
 
@@ -82,6 +57,8 @@ macOS / Linux:
 python3 -m venv .venv
 ./.venv/bin/python -m pip install -r requirements.txt
 ./.venv/bin/playwright install chromium
+./.venv/bin/python main.py init
+./.venv/bin/python main.py ui --config config.yaml
 ```
 
 Windows PowerShell:
@@ -90,245 +67,111 @@ Windows PowerShell:
 py -m venv .venv
 .\.venv\Scripts\python -m pip install -r requirements.txt
 .\.venv\Scripts\playwright install chromium
-```
-
-On macOS with Homebrew Python, always use the virtual environment commands above.
-Installing with system `python3 -m pip` may fail with `externally-managed-environment`.
-
-### 3. Bootstrap local files
-
-macOS / Linux:
-
-```bash
-./.venv/bin/python main.py init
-```
-
-Windows PowerShell:
-
-```powershell
 .\.venv\Scripts\python main.py init
+.\.venv\Scripts\python main.py ui --config config.yaml
 ```
 
-This opens the first-run bootstrap wizard: it checks the local environment, creates local `.env` and `config.yaml` from templates, validates the config, and can jump into `interactive` directly.
+Homebrew Python may reject system-wide `python3 -m pip install` with `externally-managed-environment`; use `pipx` or `venv` instead.
 
-### 4. Run
+### Option C: Nuitka executable
 
-macOS / Linux:
+macOS:
 
 ```bash
-./.venv/bin/python main.py interactive --config config.yaml
+./.venv/bin/python -m pip install -r requirements-dev.txt
+./scripts/build_nuitka_macos.sh
+./dist/nuitka-macos/autodl-helper --help
 ```
 
 Windows PowerShell:
 
 ```powershell
-.\.venv\Scripts\python main.py interactive --config config.yaml
+.\.venv\Scripts\python -m pip install -r requirements-dev.txt
+.\scripts\build_nuitka_windows.ps1
+.\dist\nuitka-windows\autodl-helper.exe --help
 ```
 
-也可以作为本地包安装：
+Nuitka 只生成 CLI/daemon console executable；本轮不做 GUI、DMG、MSI、签名、公证。Playwright 浏览器缓存不打包进可执行文件，需要浏览器登录流程时请在目标机器单独安装 Chromium。
 
-macOS / Linux:
+## Common commands
 
 ```bash
-./.venv/bin/python -m pip install -e .[dev]
 autodl-helper init
-autodl-helper --help
+autodl-helper login --config config.yaml --account main
+autodl-helper list --config config.yaml
+autodl-helper run daemon --config config.yaml
+autodl-helper run keeper --config config.yaml
+autodl-helper run scheduled --config config.yaml
+autodl-helper service install --config config.yaml
+autodl-helper service status --config config.yaml
+autodl-helper ui --config config.yaml
+autodl-helper debug health --config config.yaml
+autodl-helper debug db --config config.yaml
+autodl-helper debug auth --config config.yaml
+autodl-helper debug history --config config.yaml --limit 50
+autodl-helper config show --config config.yaml
+autodl-helper config validate --config config.example.yaml
 ```
 
-Windows PowerShell:
+完整命令见 `docs/COMMANDS.md`。
 
-```powershell
-.\.venv\Scripts\python -m pip install -e .[dev]
-autodl-helper init
-autodl-helper --help
+## Docker daemon
+
+Docker 只负责 daemon，不支持 UI、不发布端口。
+
+```bash
+docker build -t autodl-helper:local .
+docker run --rm \
+  -v "$PWD/config.yaml:/app/config.yaml:ro" \
+  -v "$PWD/data:/app/data" \
+  -v "$PWD/logs:/app/logs" \
+  -v "$PWD/.cache:/app/.cache" \
+  autodl-helper:local
 ```
 
-## Configuration
+默认容器命令：
 
-公开示例配置见：
+```bash
+autodl-helper run daemon --config /app/config.yaml
+```
 
-- `config.example.yaml`
-- `docs/CONFIGURATION.md`
+Compose:
 
-测试配置见：
+```bash
+docker compose up -d --build
+```
 
-- `config.test.yaml`
+## Local files
 
 默认本地文件：
 
-- 配置：`config.yaml`
-- 数据库：`data/autodl-helper.db`
-- 日志：`logs/`
-- auth cache：`.cache/*.json`
-- 本地状态：`.autodl-helper-*.json`
+- `config.yaml`
+- `data/autodl-helper.db`
+- `logs/`
+- `.cache/*.json`
+- `.autodl-helper-*.json`
 
-这些文件都不应提交到开源仓库。
-
-## Common Commands
-
-完整命令说明见：
-
-- `docs/COMMANDS.md`
-
-### Run daemon
-
-```bash
-python main.py run-daemon --config config.yaml
-```
-
-兼容别名：
-
-```bash
-python main.py run-all --config config.yaml
-```
-
-### Run individual tasks
-
-```bash
-python main.py run-keeper --config config.yaml
-python main.py run-scheduled-start --config config.yaml
-```
-
-### First-run bootstrap
-
-```bash
-python main.py init
-python main.py interactive --config config.yaml
-```
-
-If you need non-interactive defaults or want to overwrite existing local files, run:
-
-```bash
-python main.py init --yes
-python main.py init --force
-```
-
-### Accounts and login
-
-```bash
-python main.py accounts --config config.yaml
-python main.py login --config config.yaml --account main
-python main.py login --config config.yaml --all
-```
-
-### Instances and diagnostics
-
-```bash
-python main.py list-instances --config config.yaml
-python main.py inspect-instance --config config.yaml --instance-id <id>
-python main.py watch-instance --config config.yaml --instance-id <id>
-python main.py keeper-probe --config config.yaml
-python main.py history --config config.yaml --limit 50
-python main.py auth-report --config config.yaml
-python main.py healthcheck --config config.yaml --smoke
-```
-
-### Interactive console
-
-```bash
-python main.py interactive --config config.yaml
-```
-
-### Service management
-
-服务托管由当前操作系统自动选择后端。完整说明见：
-
-- `docs/SERVICE.md`
-
-通用命令如下：
-
-```bash
-python main.py service-install --config config.yaml
-python main.py service-start --config config.yaml
-python main.py service-status --config config.yaml
-python main.py service-stop --config config.yaml
-python main.py service-restart --config config.yaml
-python main.py service-uninstall --config config.yaml
-```
+这些文件包含本地状态或凭据，不应提交。
 
 ## Architecture
 
-完整架构说明见：
-
-- `docs/architecture.md`
-
-```text
-autodl_helper/
-├── api.py                  # AutoDL API access
-├── auth*.py                # auth, login, cache, policy
-├── cli*.py                 # CLI entry, parser, handlers, renderers
-├── config.py               # settings model and loading
-├── interactive_*.py        # terminal UI
-├── runtime_control.py      # daemon heartbeat, reload, runtime flags
-├── services/               # platform service backends
-├── storage.py              # SQLite store
-├── events.py               # history/event summaries
-└── tasks/
-    ├── keeper.py
-    └── scheduled_start.py
-```
-
-仓库其余目录：
-
-```text
-tests/              # pytest suite
-docs/               # release and maintenance docs
-scripts/            # helper scripts
-config.example.yaml # public example config
-config.test.yaml    # test config
-```
+目标结构见 `docs/architecture-slimming.md`。当前公开 API 只保证命令入口和 `config.yaml` 字段兼容；内部 import 路径不再作为兼容面维护。
 
 ## Development
 
-开发文档见：
-
-- `docs/DEVELOPMENT.md`
-- `docs/SERVICE.md`
-
-Run tests:
-
 ```bash
-python -m pytest -q
+./.venv/bin/python -m pytest -q
+./.venv/bin/python -m ruff check .
+./.venv/bin/python -m importlinter
+./.venv/bin/python -m py_compile $(find autodl_helper -name '*.py') main.py
 ```
-
-Compile check:
-
-```bash
-python -m py_compile $(find autodl_helper -name '*.py')
-```
-
-贡献说明见：
- 
-- `CONTRIBUTING.md`
-- `docs/DEVELOPMENT.md`
-- `docs/TROUBLESHOOTING.md`
-
-开源发布检查清单见：
-
-- `docs/OPEN_SOURCE_CHECKLIST.md`
-- `docs/PRIVACY.md`
-- `docs/TROUBLESHOOTING.md`
-- `docs/CONFIGURATION.md`
-- `docs/COMMANDS.md`
-- `docs/architecture.md`
 
 ## Limitations
 
-- 当前是 **CLI-first** 项目，不包含 Web UI
-- 服务托管由平台后端提供，具体支持边界见 `docs/SERVICE.md`
-- Playwright 依赖浏览器环境
-- 项目仍偏向真实 AutoDL 使用场景，公开发布前仍需人工检查截图、示例配置和历史记录
-
-## Roadmap
-
-适合继续整理的方向：
-
-- 继续完善跨平台服务托管说明
-- 持续收敛交互式页面与诊断页结构
-- 更清晰的 package / command 文档
-- CI 扩展（lint / smoke / release）
-- 发布 PyPI 包
-- 更标准的日志与事件导出
+- Docker 仅 daemon，不支持 UI。
+- SQLite 历史允许重建，不提供跨版本迁移承诺。
+- Playwright 依赖目标环境的浏览器安装。
+- Nuitka 可执行文件不包含浏览器资源。
 
 ## License
 
@@ -336,9 +179,4 @@ MIT. See `LICENSE`.
 
 ## Acknowledgement
 
-本项目当前由 `ypp977` 独立维护，并作为新的开源仓库持续演进。
-
-项目早期参考并演进自 [turbo-duck/autodl-keeper](https://github.com/turbo-duck/autodl-keeper)。
-当前仓库未保留原始 git 提交历史，但会继续保留 MIT License 要求的许可与版权声明。
-
-当前版本的工程结构、交互界面、后台运行链路、配置体系、测试与文档，均按本仓库自己的路线继续维护。
+本项目当前由 `ypp977` 独立维护。项目早期参考并演进自 [turbo-duck/autodl-keeper](https://github.com/turbo-duck/autodl-keeper)，并保留 MIT License 要求的许可与版权声明。

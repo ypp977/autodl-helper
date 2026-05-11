@@ -7,7 +7,7 @@ Check whether the daemon is actually writing new scheduled history.
 Commands:
 
 ```bash
-python main.py service-status --config config.yaml
+python main.py service status --config config.yaml
 tail -n 20 logs/service.stdout.log
 ```
 
@@ -20,7 +20,7 @@ What to verify:
 If needed:
 
 ```bash
-python main.py service-restart --config config.yaml
+python main.py service restart --config config.yaml
 ```
 
 ## 2. Interactive page only updates after pressing Enter
@@ -34,7 +34,7 @@ This usually means one of these:
 First:
 
 ```bash
-python main.py interactive --config config.yaml
+python main.py ui --config config.yaml
 ```
 
 Then confirm:
@@ -47,7 +47,7 @@ Then confirm:
 Check:
 
 ```bash
-python main.py service-status --config config.yaml
+python main.py service status --config config.yaml
 tail -n 50 logs/service.stderr.log
 tail -n 50 logs/service.stdout.log
 ```
@@ -67,7 +67,7 @@ Platform-specific checks:
 Try:
 
 ```bash
-python main.py service-restart --config config.yaml
+python main.py service restart --config config.yaml
 ```
 
 ## 4. Keeper plan looks wrong
@@ -101,9 +101,9 @@ python main.py history --config config.yaml --task keeper --limit 50
 Run:
 
 ```bash
-python main.py validate-config --config config.yaml
-python main.py config-resolve --config config.yaml
-python main.py service-restart --config config.yaml
+python main.py config validate --config config.yaml
+python main.py config show --config config.yaml
+python main.py service restart --config config.yaml
 ```
 
 If config reload fails, the daemon keeps using the last valid config.
@@ -114,7 +114,7 @@ Check:
 
 ```bash
 python main.py login --config config.yaml --account main
-python main.py auth-report --config config.yaml
+python main.py debug auth --config config.yaml
 ```
 
 Verify:
@@ -134,14 +134,14 @@ Symptoms:
 Check:
 
 ```bash
-python main.py db-check --config config.yaml
+python main.py debug db --config config.yaml
 ls -la data logs .cache
 ```
 
 If needed, stop the daemon before manual cleanup:
 
 ```bash
-python main.py service-stop --config config.yaml
+python main.py service stop --config config.yaml
 ```
 
 Then back up and inspect local files before deleting anything.
@@ -153,5 +153,5 @@ Please collect:
 - exact command
 - sanitized config snippet
 - sanitized logs
-- whether you used interactive or daemon mode
+- whether you used ui or daemon mode
 - OS and Python version

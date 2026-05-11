@@ -2,12 +2,12 @@
 
 `autodl-helper` exposes one public service-management command set:
 
-- `service-install`
-- `service-start`
-- `service-stop`
-- `service-restart`
-- `service-status`
-- `service-uninstall`
+- `service install`
+- `service start`
+- `service stop`
+- `service restart`
+- `service status`
+- `service uninstall`
 
 The implementation behind those commands is selected by the current operating system.
 
@@ -39,7 +39,7 @@ Typical behavior:
 - install a plist into `~/Library/LaunchAgents`
 - bootstrap the service with `launchctl`
 - keep the daemon running in the background
-- expose status through `service-status`
+- expose status through `service status`
 
 Use this backend when the project runs on macOS and you want a managed background daemon.
 
@@ -52,7 +52,7 @@ Typical behavior:
 - write a unit file under `~/.config/systemd/user/`
 - enable and start it with `systemctl --user`
 - keep the daemon tied to the current user session
-- expose status through `service-status`
+- expose status through `service status`
 
 This backend does not require root in the first version.
 
@@ -65,7 +65,7 @@ Typical behavior:
 - create one scheduled task named `autodl-helper`
 - trigger it when the user logs in
 - run the daemon with the current Python interpreter
-- expose status through `service-status`
+- expose status through `service status`
 
 This first version is intentionally task-based, not a Windows Service.
 
@@ -73,11 +73,11 @@ This first version is intentionally task-based, not a Windows Service.
 
 The service commands keep the same names on every platform.
 
-- `service-install` installs the platform backend
-- `service-start` starts the installed service
-- `service-stop` stops the installed service
-- `service-restart` restarts the installed service
-- `service-status` shows the service and daemon state
-- `service-uninstall` removes the installed service
+- `service install` installs the platform backend
+- `service start` starts the installed service
+- `service stop` stops the installed service
+- `service restart` restarts the installed service
+- `service status` shows the service and daemon state
+- `service uninstall` removes the installed service
 
 If a backend is not available on the current platform, the command should fail with a clear platform-specific message.
