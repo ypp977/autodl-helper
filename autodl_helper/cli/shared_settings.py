@@ -6,8 +6,8 @@ import re
 from dataclasses import asdict
 from typing import Any, Callable
 
-from autodl_helper.auth_policy import resolve_auth_runtime_policy
-from autodl_helper.config import AccountSettings, LIGHTWEIGHT_MODES, Settings
+from autodl_helper.core.auth import resolve_auth_runtime_policy
+from autodl_helper.core.config import AccountSettings, LIGHTWEIGHT_MODES, Settings
 
 from .shared_accounts import get_enabled_accounts
 
@@ -139,7 +139,7 @@ def validate_settings(
     if not enabled_accounts:
         errors.append('At least one enabled account is required.')
     for account in enabled_accounts:
-        if purpose != 'test-notify' and not account.authorization and not (account.autodl_phone and account.autodl_password):
+        if purpose != 'test_notify' and not account.authorization and not (account.autodl_phone and account.autodl_password):
             errors.append(f'account {account.name}: Either Authorization or both AUTODL_PHONE and AUTODL_PASSWORD are required.')
         if account.cache_max_age_seconds <= 0:
             errors.append(f'account {account.name}: auth.cache_max_age_seconds must be a positive integer.')
@@ -153,11 +153,13 @@ def validate_settings(
             errors.append(f'account {account.name}: auth_failure_backoff_seconds must be zero or a positive integer.')
 
     keeper = settings.tasks.keeper
-    if purpose in {'all', 'run-daemon', 'run-all', 'run-keeper', 'validate', 'healthcheck'}:
+    if purpose in {'all', 'run_daemon', 'run_all', 'run_keeper', 'validate', 'debug_health'}:
         if keeper.shutdown_release_after_hours <= 0:
             errors.append('keeper.shutdown_release_after_hours must be a positive integer.')
         if keeper.keeper_trigger_before_hours < 0:
             errors.append('keeper.keeper_trigger_before_hours must be zero or a positive integer.')
+        if keeper.keeper_trigger_before_hours >= keeper.shutdown_release_after_hours:
+            errors.append('keeper.keeper_trigger_before_hours must be smaller than shutdown_release_after_hours.')
         if keeper.start_cooldown_minutes < 0:
             errors.append('keeper.start_cooldown_minutes must be zero or a positive integer.')
         if keeper.stop_cooldown_minutes < 0:
@@ -167,7 +169,7 @@ def validate_settings(
         errors.append('storage.database_file is required.')
 
     scheduled = settings.tasks.scheduled_start
-    if purpose in {'all', 'run-daemon', 'run-all', 'run-scheduled-start', 'validate', 'healthcheck'} and scheduled.enabled:
+    if purpose in {'all', 'run_daemon', 'run_all', 'run_scheduled', 'validate', 'debug_health'} and scheduled.enabled:
         if scheduled.poll_interval_seconds < 5:
             errors.append('scheduled_start.poll_interval_seconds must be at least 5.')
         if not scheduled.jobs:
@@ -190,11 +192,11 @@ def validate_settings(
                         if not (entry.instance_id or entry.region or entry.machine_alias):
                             errors.append(f'scheduled_start job {label} priority entries must define at least one matcher.')
 
-    if purpose in {'all', 'run-daemon', 'run-all', 'run-keeper', 'run-scheduled-start', 'validate', 'test-notify', 'healthcheck'} and settings.notifications.pushplus.enabled and not settings.notifications.pushplus.token:
+    if purpose in {'all', 'run_daemon', 'run_all', 'run_keeper', 'run_scheduled', 'validate', 'test_notify', 'debug_health'} and settings.notifications.pushplus.enabled and not settings.notifications.pushplus.token:
         errors.append('pushplus is enabled but token is missing.')
-    if purpose in {'all', 'run-daemon', 'run-all', 'run-keeper', 'run-scheduled-start', 'validate', 'test-notify', 'healthcheck'} and settings.notifications.serverchan.enabled and not settings.notifications.serverchan.token:
+    if purpose in {'all', 'run_daemon', 'run_all', 'run_keeper', 'run_scheduled', 'validate', 'test_notify', 'debug_health'} and settings.notifications.serverchan.enabled and not settings.notifications.serverchan.token:
         errors.append('serverchan is enabled but token is missing.')
-    if purpose in {'all', 'run-daemon', 'run-all', 'run-keeper', 'run-scheduled-start', 'validate', 'test-notify', 'healthcheck'} and settings.notifications.email.enabled:
+    if purpose in {'all', 'run_daemon', 'run_all', 'run_keeper', 'run_scheduled', 'validate', 'test_notify', 'debug_health'} and settings.notifications.email.enabled:
         email = settings.notifications.email
         if not email.smtp_host or not email.username or not email.password or not email.to:
             errors.append('email is enabled but smtp_host/username/password/to are incomplete.')

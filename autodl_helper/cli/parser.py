@@ -50,126 +50,104 @@ def _add_runtime_override_args(parser: argparse.ArgumentParser) -> None:
     _add_auth_override_args(parser)
 
 
+def _add_config_arg(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument('--config', default='config.yaml', help='Path to YAML config file')
+
+
+def _add_service_command(subparsers: argparse._SubParsersAction, name: str, help_text: str) -> None:
+    command_parser = subparsers.add_parser(name, help=help_text)
+    _add_config_arg(command_parser)
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description='autodl-helper')
     subparsers = parser.add_subparsers(dest='command')
     subparsers.required = True
 
-    run_daemon_parser = subparsers.add_parser('run-daemon', help='Run daemon tasks in foreground')
-    _add_run_args(run_daemon_parser)
-    _add_runtime_override_args(run_daemon_parser)
-
-    run_all_parser = subparsers.add_parser('run-all', help='Compatibility alias for run-daemon')
-    _add_run_args(run_all_parser)
-    _add_runtime_override_args(run_all_parser)
-
-    run_keeper_parser = subparsers.add_parser('run-keeper', aliases=['keep'], help='Run keep-alive only')
-    _add_run_args(run_keeper_parser)
-    _add_runtime_override_args(run_keeper_parser)
-
-    run_scheduled_parser = subparsers.add_parser('run-scheduled-start', aliases=['grab'], help='Run scheduled-start only')
-    _add_run_args(run_scheduled_parser)
-    _add_runtime_override_args(run_scheduled_parser)
-
-    service_install_parser = subparsers.add_parser('service-install', help='Install background service for run-daemon')
-    service_install_parser.add_argument('--config', default='config.yaml', help='Path to YAML config file')
-
-    service_start_parser = subparsers.add_parser('service-start', help='Start installed background service')
-    service_start_parser.add_argument('--config', default='config.yaml', help='Path to YAML config file')
-
-    service_stop_parser = subparsers.add_parser('service-stop', help='Stop installed background service')
-    service_stop_parser.add_argument('--config', default='config.yaml', help='Path to YAML config file')
-
-    service_restart_parser = subparsers.add_parser('service-restart', help='Restart installed background service')
-    service_restart_parser.add_argument('--config', default='config.yaml', help='Path to YAML config file')
-
-    service_status_parser = subparsers.add_parser('service-status', help='Show background service and daemon status')
-    service_status_parser.add_argument('--config', default='config.yaml', help='Path to YAML config file')
-
-    service_uninstall_parser = subparsers.add_parser('service-uninstall', help='Uninstall background service')
-    service_uninstall_parser.add_argument('--config', default='config.yaml', help='Path to YAML config file')
-
     init_parser = subparsers.add_parser('init', help='Bootstrap local .env and config.yaml for first run')
-    init_parser.add_argument('--config', default='config.yaml', help='Path to YAML config file')
+    _add_config_arg(init_parser)
     init_parser.add_argument('--force', action='store_true', help='Overwrite existing local bootstrap files')
     init_parser.add_argument('--yes', action='store_true', help='Accept defaults without interactive prompts')
-
-    accounts_parser = subparsers.add_parser('accounts', help='Show configured account and login status')
-    accounts_parser.add_argument('--config', default='config.yaml', help='Path to YAML config file')
-    accounts_parser.add_argument('--account', help='Only show one configured account name')
-    accounts_parser.add_argument('--json', action='store_true', help='Output JSON instead of text')
 
     login_parser = subparsers.add_parser('login', help='Refresh login/token for one or all accounts')
     _add_common_runtime_args(login_parser)
     login_parser.add_argument('--all', action='store_true', help='Refresh all enabled accounts')
 
-    list_parser = subparsers.add_parser('list-instances', help='List AutoDL instances')
+    accounts_parser = subparsers.add_parser('accounts', help='Show configured account auth status')
+    _add_config_arg(accounts_parser)
+    accounts_parser.add_argument('--account', help='Only show one configured account name')
+    accounts_parser.add_argument('--json', action='store_true', help='Output JSON instead of table')
+
+    list_parser = subparsers.add_parser('list', help='List AutoDL instances')
     _add_common_runtime_args(list_parser)
     list_parser.add_argument('--json', action='store_true', help='Output JSON instead of table')
 
-    inspect_parser = subparsers.add_parser('inspect-instance', help='Show debug fields for one AutoDL instance')
-    _add_common_runtime_args(inspect_parser)
-    inspect_parser.add_argument('--instance-id', required=True, help='Target AutoDL instance UUID')
+    run_parser = subparsers.add_parser('run', help='Run foreground tasks')
+    run_subparsers = run_parser.add_subparsers(dest='run_command')
+    run_subparsers.required = True
+    for name, mode, help_text in (
+        ('daemon', 'all', 'Run daemon tasks in foreground'),
+        ('keeper', 'keeper', 'Run keep-alive only'),
+        ('scheduled', 'scheduled_start', 'Run scheduled-start only'),
+    ):
+        command_parser = run_subparsers.add_parser(name, help=help_text)
+        command_parser.set_defaults(run_mode=mode)
+        _add_run_args(command_parser)
+        _add_runtime_override_args(command_parser)
 
-    watch_parser = subparsers.add_parser('watch-instance', help='Watch key instance fields continuously')
-    _add_common_runtime_args(watch_parser)
-    watch_parser.add_argument('--instance-id', required=True, help='Target AutoDL instance UUID')
-    watch_parser.add_argument('--interval', type=int, default=5, help='Polling interval in seconds')
-    watch_parser.add_argument('--json', action='store_true', help='Emit full JSON snapshot every poll')
+    service_parser = subparsers.add_parser('service', help='Manage background service')
+    service_subparsers = service_parser.add_subparsers(dest='service_command')
+    service_subparsers.required = True
+    _add_service_command(service_subparsers, 'install', 'Install background service for run daemon')
+    _add_service_command(service_subparsers, 'start', 'Start installed background service')
+    _add_service_command(service_subparsers, 'stop', 'Stop installed background service')
+    _add_service_command(service_subparsers, 'restart', 'Restart installed background service')
+    _add_service_command(service_subparsers, 'status', 'Show background service and daemon status')
+    _add_service_command(service_subparsers, 'uninstall', 'Uninstall background service')
 
-    probe_parser = subparsers.add_parser('keeper-probe', help='Explain keeper timing for instances')
-    _add_common_runtime_args(probe_parser)
-    probe_parser.add_argument('--only-eligible', action='store_true', help='Only show instances meeting keeper conditions')
+    ui_parser = subparsers.add_parser('ui', help='Launch interactive control panel')
+    _add_common_runtime_args(ui_parser)
+    _add_path_args(ui_parser)
 
-    history_parser = subparsers.add_parser('history', help='Show recent keeper/scheduled-start history from SQLite')
+    debug_parser = subparsers.add_parser('debug', help='Run diagnostic commands')
+    debug_subparsers = debug_parser.add_subparsers(dest='debug_command')
+    debug_subparsers.required = True
+
+    health_parser = debug_subparsers.add_parser('health', help='Run local operational checks')
+    _add_common_runtime_args(health_parser)
+    _add_path_args(health_parser)
+    health_parser.add_argument('--smoke', action='store_true', help='Also perform auth and instance list smoke test')
+
+    db_parser = debug_subparsers.add_parser('db', help='Check SQLite schema and writability')
+    _add_common_runtime_args(db_parser)
+
+    auth_parser = debug_subparsers.add_parser('auth', help='Summarize observed auth failure signals from SQLite event log')
+    _add_common_runtime_args(auth_parser)
+    auth_parser.add_argument('--limit', type=int, default=50, help='Maximum grouped rows to print')
+    auth_parser.add_argument('--json', action='store_true', help='Output JSON for troubleshooting')
+    auth_parser.add_argument('--only-unmapped', action='store_true', help='Only show currently uncovered code/msg pairs')
+    auth_parser.add_argument('--only-likely-auth', action='store_true', help='Only keep likely auth-related signals and filter obvious noise')
+    auth_parser.add_argument('--suggest-patch', action='store_true', help='Generate suggested patch content for auth_error_signals.py')
+    auth_parser.add_argument('--apply-suggested-patch', action='store_true', help='Apply suggested patch to auth_error_signals.py automatically')
+
+    history_parser = debug_subparsers.add_parser('history', help='Show recent keeper/scheduled-start history from SQLite')
     _add_common_runtime_args(history_parser)
     history_parser.add_argument('--task', choices=['keeper', 'scheduled_start'], help='Filter by task type')
     history_parser.add_argument('--event-type', help='Filter by exact event_type, e.g. scheduled.started')
     history_parser.add_argument('--limit', type=int, default=20, help='Maximum rows to print')
     history_parser.add_argument('--json', action='store_true', help='Output JSON for troubleshooting')
 
-    auth_report_parser = subparsers.add_parser('auth-report', help='Summarize observed auth failure signals from SQLite event log')
-    _add_common_runtime_args(auth_report_parser)
-    auth_report_parser.add_argument('--limit', type=int, default=50, help='Maximum grouped rows to print')
-    auth_report_parser.add_argument('--json', action='store_true', help='Output JSON for troubleshooting')
-    auth_report_parser.add_argument('--only-unmapped', action='store_true', help='Only show currently uncovered code/msg pairs')
-    auth_report_parser.add_argument('--only-likely-auth', action='store_true', help='Only keep likely auth-related signals and filter obvious noise')
-    auth_report_parser.add_argument('--suggest-patch', action='store_true', help='Generate suggested patch content for auth_error_signals.py')
-    auth_report_parser.add_argument('--apply-suggested-patch', action='store_true', help='Apply suggested patch to auth_error_signals.py automatically')
+    config_parser = subparsers.add_parser('config', help='Inspect and validate configuration')
+    config_subparsers = config_parser.add_subparsers(dest='config_command')
+    config_subparsers.required = True
 
-    db_check_parser = subparsers.add_parser('db-check', help='Check SQLite schema and writability')
-    _add_common_runtime_args(db_check_parser)
-
-    healthcheck_parser = subparsers.add_parser('healthcheck', help='Run local operational checks')
-    _add_common_runtime_args(healthcheck_parser)
-    _add_path_args(healthcheck_parser)
-    healthcheck_parser.add_argument('--smoke', action='store_true', help='Also perform auth and list-instances smoke test')
-
-    notify_parser = subparsers.add_parser('test-notify', help='Send a test notification')
-    notify_parser.add_argument('--config', default='config.yaml', help='Path to YAML config file')
-    notify_parser.add_argument('--channel', choices=['pushplus', 'serverchan', 'email', 'all'], default='all', help='Notification channel to test')
-
-    validate_parser = subparsers.add_parser('validate-config', help='Validate configuration only')
-    validate_parser.add_argument('--config', default='config.yaml', help='Path to YAML config file')
-    validate_parser.add_argument('--account', help='Only resolve one configured account name')
-    _add_runtime_override_args(validate_parser)
-
-    config_show_parser = subparsers.add_parser('config-show', help='Show loaded configuration from file/env')
-    config_show_parser.add_argument('--config', default='config.yaml', help='Path to YAML config file')
+    config_show_parser = config_subparsers.add_parser('show', help='Show loaded configuration from file/env')
+    _add_config_arg(config_show_parser)
     config_show_parser.add_argument('--account', help='Only show one configured account name')
 
-    config_resolve_parser = subparsers.add_parser('config-resolve', help='Show effective configuration after CLI overrides')
-    config_resolve_parser.add_argument('--config', default='config.yaml', help='Path to YAML config file')
-    config_resolve_parser.add_argument('--account', help='Only resolve one configured account name')
-    _add_runtime_override_args(config_resolve_parser)
-
-    config_edit_parser = subparsers.add_parser('config-edit', help='Persist supported settings into config.yaml')
-    config_edit_parser.add_argument('--config', default='config.yaml', help='Path to YAML config file')
-    config_edit_parser.add_argument('--account', help='Only edit one configured account name')
-    _add_runtime_override_args(config_edit_parser)
-
-    interactive_parser = subparsers.add_parser('interactive', help='Launch interactive control panel')
-    _add_common_runtime_args(interactive_parser)
-    _add_path_args(interactive_parser)
+    config_validate_parser = config_subparsers.add_parser('validate', help='Validate configuration only')
+    _add_config_arg(config_validate_parser)
+    config_validate_parser.add_argument('--account', help='Only resolve one configured account name')
+    _add_runtime_override_args(config_validate_parser)
 
     return parser

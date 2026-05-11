@@ -3,8 +3,8 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Callable
 
-from autodl_helper.config import AccountSettings, Settings
-from autodl_helper.storage import SQLiteStore
+from autodl_helper.core.config import AccountSettings, Settings
+from autodl_helper.core.store import SQLiteStore
 
 from .shared_accounts import build_client, create_store, get_enabled_accounts
 from .shared_settings import validate_settings
@@ -34,7 +34,7 @@ def collect_healthcheck_errors(
     create_store_fn: Callable[[Settings], SQLiteStore] = create_store,
     build_client_fn: Callable[..., object] = build_client,
 ) -> list[str]:
-    errors = validate_settings_fn(settings, purpose='healthcheck')
+    errors = validate_settings_fn(settings, purpose='debug_health')
     for account in get_enabled_accounts_fn(settings):
         if not permission_probe(account.cache_file):
             errors.append(f'Auth cache file is not writable for account {account.name}: {account.cache_file}')

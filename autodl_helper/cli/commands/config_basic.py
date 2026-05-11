@@ -7,7 +7,7 @@ import sys
 from pathlib import Path
 from typing import Callable
 
-from autodl_helper.config import Settings, load_settings
+from autodl_helper.core.config import Settings, load_settings
 
 from ..shared_settings import apply_cli_overrides, serialize_settings, validate_settings
 
@@ -79,12 +79,12 @@ def command_init(
     print('[4/4] Ready')
     print('Bootstrap complete.')
     print('Next:')
-    print(f'  python main.py interactive --config {config_path.name}')
+    print(f'  python main.py ui --config {config_path.name}')
     print(f'  python main.py login --config {config_path.name} --account <account-name>')
-    print(f'  python main.py service-install --config {config_path.name}')
+    print(f'  python main.py service install --config {config_path.name}')
 
     if launch_interactive_fn is not None and not getattr(args, 'yes', False):
-        answer = str(input_fn('Launch interactive now? [y/N]: ')).strip().lower()
+        answer = str(input_fn('Launch UI now? [y/N]: ')).strip().lower()
         if answer in {'y', 'yes'}:
             interactive_args = argparse.Namespace(**vars(args))
             interactive_args.config = str(config_path)

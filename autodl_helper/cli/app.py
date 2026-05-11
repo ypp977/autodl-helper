@@ -10,14 +10,27 @@ import time
 from pathlib import Path
 from typing import Sequence, TextIO
 
-from autodl_helper.auth import AuthError, alert_auth_failure, resolve_authorization
-from autodl_helper.auth_error_signals import AUTH_CODE_SIGNALS, AUTH_MESSAGE_SIGNALS
-from .handlers import (
+from autodl_helper.core.auth import AuthError, alert_auth_failure, resolve_authorization
+from autodl_helper.core.auth import AUTH_CODE_SIGNALS, AUTH_MESSAGE_SIGNALS
+from .shared import (
     build_named_notifiers as _build_named_notifiers_impl,
     build_notifiers as _build_notifiers_impl,
     build_client as _build_client_impl,
-    command_interactive as _command_interactive_impl,
     collect_healthcheck_errors as _collect_healthcheck_errors_impl,
+    compute_cycle_interval_seconds as _compute_cycle_interval_seconds_impl,
+    compute_dispatch_interval_seconds as _compute_dispatch_interval_seconds_impl,
+    compute_interval_for_mode as _compute_interval_for_mode_impl,
+    create_client as _create_client_impl,
+    create_store as _create_store_impl,
+    get_enabled_accounts as _get_enabled_accounts_impl,
+    probe_path_writable as _probe_path_writable_impl,
+    record_auth_event as _record_auth_event_impl,
+    select_accounts as _select_accounts_impl,
+    validate_settings as _validate_settings_impl,
+    apply_cli_overrides as _apply_cli_overrides_impl,
+)
+from .commands import (
+    command_interactive as _command_interactive_impl,
     command_auth_report as _command_auth_report_impl,
     command_accounts as _command_accounts_impl,
     command_config_resolve as _command_config_resolve_impl,
@@ -41,21 +54,10 @@ from .handlers import (
     command_test_notify as _command_test_notify_impl,
     command_validate_config as _command_validate_config_impl,
     command_watch_instance as _command_watch_instance_impl,
-    compute_cycle_interval_seconds as _compute_cycle_interval_seconds_impl,
-    compute_dispatch_interval_seconds as _compute_dispatch_interval_seconds_impl,
-    compute_interval_for_mode as _compute_interval_for_mode_impl,
-    create_client as _create_client_impl,
-    create_store as _create_store_impl,
-    get_enabled_accounts as _get_enabled_accounts_impl,
-    probe_path_writable as _probe_path_writable_impl,
-    record_auth_event as _record_auth_event_impl,
     run_cycle as _run_cycle_impl,
     run_keeper_only as _run_keeper_only_impl,
     run_scheduled_start_cycle as _run_scheduled_start_cycle_impl,
-    select_accounts as _select_accounts_impl,
-    validate_settings as _validate_settings_impl,
     watch_instance as _watch_instance_impl,
-    apply_cli_overrides as _apply_cli_overrides_impl,
 )
 from .parser import build_parser as _build_parser_impl
 from .renderers import (
@@ -83,18 +85,9 @@ from .renderers import (
     render_python_signal_block as _render_python_signal_block_impl,
     replace_python_signal_block as _replace_python_signal_block_impl,
 )
-from autodl_helper.config import AccountSettings, LIGHTWEIGHT_MODES, NotificationSettings, Settings, load_settings
-from autodl_helper.interactive_actions import (
-    auth_panel_rows as _auth_panel_rows_impl,
-    history_panel_rows as _history_panel_rows_impl,
-    keeper_probe_rows as _keeper_probe_rows_impl,
-    list_instances_panel_rows as _list_instances_panel_rows_impl,
-    request_reload,
-    scheduled_candidate_panel_data as _scheduled_candidate_panel_data_impl,
-    scheduled_job_status_rows as _scheduled_job_status_rows_impl,
-)
+from autodl_helper.core.config import AccountSettings, LIGHTWEIGHT_MODES, NotificationSettings, Settings, load_settings
 from autodl_helper.lock import FileLock
-from autodl_helper.models import AuthEventSummary, HistoryRecord, KeeperResult, ScheduledStartResult
+from autodl_helper.core.models import AuthEventSummary, HistoryRecord, KeeperResult, ScheduledStartResult
 from autodl_helper.runtime_control import (
     DAEMON_LAUNCH_FUSE_AFTER_FAILURES,
     DAEMON_LAUNCH_FUSE_COOLDOWN_SECONDS,
@@ -110,7 +103,7 @@ from autodl_helper.runtime_control import (
     read_daemon_status,
     request_config_reload,
 )
-from autodl_helper.storage import SQLiteStore
+from autodl_helper.core.store import SQLiteStore
 from autodl_helper.tasks.keeper import evaluate_keeper_instance, run_keeper_cycle
 from autodl_helper.tasks.scheduled_start import run_scheduled_start_job
 from autodl_helper.tracemalloc_profiler import profiler_from_env
@@ -146,8 +139,13 @@ def _configure_logging() -> None:
     for handler in root_logger.handlers:
         handler.setFormatter(formatter)
     logging.getLogger('apscheduler').setLevel(logging.WARNING)
-AUTH_ERROR_SIGNALS_FILE = Path(__file__).resolve().parent.parent / 'auth_error_signals.py'
+AUTH_ERROR_SIGNALS_FILE = Path(__file__).resolve().parent.parent / 'auth' / 'errors.py'
 
+
+
+
+def request_reload(store: SQLiteStore):
+    return request_config_reload(store)
 
 def build_parser():
     return _build_parser_impl()
@@ -213,7 +211,8 @@ def start_background_scheduled_polling(args) -> tuple[int, str]:
     cmd = [
         sys.executable,
         str(main_py),
-        'run-scheduled-start',
+        'run',
+        'scheduled',
         '--config',
         config_path,
         '--lock-file',
@@ -715,72 +714,10 @@ def _command_service_uninstall(args) -> int:
     return _command_service_uninstall_impl(args)
 
 
-def list_instances_panel_rows(settings: Settings, store: SQLiteStore, *, account_name: str | None = None):
-    return _list_instances_panel_rows_impl(
-        settings,
-        store,
-        account_name=account_name,
-        select_accounts_fn=select_accounts,
-        build_client_fn=build_client,
-    )
-
-
-def history_panel_rows(store: SQLiteStore, *, account_name: str | None = None, limit: int = 5):
-    return _history_panel_rows_impl(store, account_name=account_name, limit=limit)
-
-
-def auth_panel_rows(store: SQLiteStore, *, account_name: str | None = None, limit: int = 5):
-    return _auth_panel_rows_impl(store, account_name=account_name, limit=limit)
-
-
-def scheduled_candidate_panel_data(settings: Settings, store: SQLiteStore, *, account_name: str | None = None, job_name: str | None = None):
-    return _scheduled_candidate_panel_data_impl(settings, store, account_name=account_name, job_name=job_name)
-
-
-def keeper_probe_rows(settings: Settings, store: SQLiteStore, *, account_name: str | None = None):
-    return _keeper_probe_rows_impl(
-        settings,
-        store,
-        account_name=account_name,
-        select_accounts_fn=select_accounts,
-        build_client_fn=build_client,
-        evaluate_keeper_instance_fn=evaluate_keeper_instance,
-    )
-
-
-def scheduled_job_status_rows(settings: Settings, store: SQLiteStore, *, account_name: str | None = None, job_name: str | None = None, limit: int = 5):
-    return _scheduled_job_status_rows_impl(settings, store, account_name=account_name, job_name=job_name, limit=limit)
-
-
 def _command_interactive(args) -> int:
-    return _command_interactive_impl(
-        args,
-        load_settings_fn=load_settings,
-        create_store_fn=create_store,
-        run_variant_fn=_command_run_variant,
-        start_background_scheduled_fn=start_background_scheduled_polling,
-        stop_background_polling_fn=stop_background_polling,
-        command_config_show_fn=_command_config_show,
-        command_config_resolve_fn=_command_config_resolve,
-        command_config_edit_fn=_command_config_edit,
-        command_history_fn=_command_history,
-        command_keeper_probe_fn=_command_keeper_probe,
-        command_auth_report_fn=_command_auth_report,
-        command_list_instances_fn=_command_list_instances,
-        command_accounts_fn=_command_accounts,
-        command_login_fn=_command_login,
-        command_healthcheck_fn=_command_healthcheck,
-        list_instances_panel_rows_fn=list_instances_panel_rows,
-        history_panel_rows_fn=history_panel_rows,
-        auth_panel_rows_fn=auth_panel_rows,
-        run_keeper_only_fn=run_keeper_only,
-        run_scheduled_start_cycle_fn=run_scheduled_start_cycle,
-        scheduled_job_status_rows_fn=scheduled_job_status_rows,
-        scheduled_candidate_panel_data_fn=scheduled_candidate_panel_data,
-        select_accounts_fn=select_accounts,
-        build_client_fn=build_client,
-        evaluate_keeper_instance_fn=evaluate_keeper_instance,
-    )
+    from autodl_helper.ui import run_ui
+
+    return run_ui(args)
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -792,57 +729,41 @@ def main(argv: Sequence[str] | None = None) -> int:
         except SystemExit as exc:
             return int(exc.code)
 
-        if args.command in {'run-daemon', 'run-all'}:
-            return _command_run_variant(args, 'all')
-        if args.command in {'run-keeper', 'keep'}:
-            return _command_run_variant(args, 'keeper')
-        if args.command in {'run-scheduled-start', 'grab'}:
-            return _command_run_variant(args, 'scheduled_start')
-        if args.command == 'service-install':
-            return _command_service_install(args)
-        if args.command == 'service-start':
-            return _command_service_start(args)
-        if args.command == 'service-stop':
-            return _command_service_stop(args)
-        if args.command == 'service-restart':
-            return _command_service_restart(args)
-        if args.command == 'service-status':
-            return _command_service_status(args)
-        if args.command == 'service-uninstall':
-            return _command_service_uninstall(args)
-        if args.command == 'accounts':
-            return _command_accounts(args)
-        if args.command == 'login':
-            return _command_login(args)
-        if args.command == 'list-instances':
-            return _command_list_instances(args)
-        if args.command == 'inspect-instance':
-            return _command_inspect_instance(args)
-        if args.command == 'watch-instance':
-            return _command_watch_instance(args)
-        if args.command == 'keeper-probe':
-            return _command_keeper_probe(args)
-        if args.command == 'history':
-            return _command_history(args)
-        if args.command == 'auth-report':
-            return _command_auth_report(args)
-        if args.command == 'db-check':
-            return _command_db_check(args)
-        if args.command == 'test-notify':
-            return _command_test_notify(args)
-        if args.command == 'validate-config':
-            return _command_validate_config(args)
-        if args.command == 'config-show':
-            return _command_config_show(args)
-        if args.command == 'config-resolve':
-            return _command_config_resolve(args)
-        if args.command == 'config-edit':
-            return _command_config_edit(args)
-        if args.command == 'healthcheck':
-            return _command_healthcheck(args)
+        if args.command == 'run':
+            return _command_run_variant(args, args.run_mode)
+        if args.command == 'service':
+            service_handlers = {
+                'install': _command_service_install,
+                'start': _command_service_start,
+                'stop': _command_service_stop,
+                'restart': _command_service_restart,
+                'status': _command_service_status,
+                'uninstall': _command_service_uninstall,
+            }
+            return service_handlers[args.service_command](args)
+        if args.command == 'debug':
+            debug_handlers = {
+                'health': _command_healthcheck,
+                'db': _command_db_check,
+                'auth': _command_auth_report,
+                'history': _command_history,
+            }
+            return debug_handlers[args.debug_command](args)
+        if args.command == 'config':
+            config_handlers = {
+                'show': _command_config_show,
+                'validate': _command_validate_config,
+            }
+            return config_handlers[args.config_command](args)
         if args.command == 'init':
             return _command_init(args)
-        if args.command == 'interactive':
+        if args.command == 'login':
+            return _command_login(args)
+        if args.command == 'accounts':
+            return _command_accounts(args)
+        if args.command == 'list':
+            return _command_list_instances(args)
+        if args.command == 'ui':
             return _command_interactive(args)
 
         parser.print_help(sys.stderr)

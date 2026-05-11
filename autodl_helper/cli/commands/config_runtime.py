@@ -6,8 +6,8 @@ import sys
 from pathlib import Path
 from typing import Any, Callable
 
-from autodl_helper.config import Settings, load_settings
-from autodl_helper.storage import SQLiteStore
+from autodl_helper.core.config import Settings, load_settings
+from autodl_helper.core.store import SQLiteStore
 
 from ..shared_healthcheck import collect_healthcheck_errors
 from ..shared_settings import apply_cli_overrides, validate_settings
@@ -47,7 +47,7 @@ def _maybe_reload_daemon_settings(
         return active_settings
     try:
         candidate = apply_cli_overrides(args, load_settings_fn(args.config))
-        errors = validate_settings_fn(candidate, purpose='run-daemon')
+        errors = validate_settings_fn(candidate, purpose='run_daemon')
         if errors:
             raise ValueError('\n'.join(errors))
     except Exception as exc:

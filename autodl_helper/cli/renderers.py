@@ -5,8 +5,8 @@ import re
 from pathlib import Path
 from typing import Sequence
 
-from autodl_helper.auth_error_signals import AUTH_CODE_SIGNALS, AUTH_MESSAGE_SIGNALS
-from autodl_helper.models import AuthEventSummary, HistoryRecord, KeeperResult
+from autodl_helper.core.auth import AUTH_CODE_SIGNALS, AUTH_MESSAGE_SIGNALS
+from autodl_helper.core.models import AuthEventSummary, HistoryRecord, KeeperResult
 from autodl_helper.tasks.keeper import compute_keeper_schedule, format_duration_seconds
 
 
@@ -204,6 +204,12 @@ def probe_reason_label(value: str) -> str:
     }.get(value, value)
 
 
+def _keeper_response_suffix(result: KeeperResult) -> str:
+    if result.response_code or result.response_msg:
+        return f' | 接口返回={result.response_code or "-"}:{result.response_msg or "-"}'
+    return ''
+
+
 def format_keeper_probe_line(result: KeeperResult, *, account_name: str = '', executed_in_cycle: bool = False) -> str:
     parts = []
     if account_name:
@@ -223,6 +229,8 @@ def format_keeper_probe_line(result: KeeperResult, *, account_name: str = '', ex
         f'最近启动时间={result.started_at or "-"}',
         f'最近关机时间={result.stopped_at or "-"}',
     ])
+    if result.result in {'keeper_failed_power_on', 'keeper_failed_power_off'}:
+        parts.append(_keeper_response_suffix(result))
     if result.release_source == 'fallback_status_at' and result.status_at:
         parts.append(f'辅助状态时间={result.status_at}')
     return ' | '.join(parts)

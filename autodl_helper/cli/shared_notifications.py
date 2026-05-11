@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from autodl_helper.config import NotificationSettings
+from autodl_helper.core.config import NotificationSettings
 from autodl_helper.notify import EmailNotifier, PushPlusNotifier, ServerChanNotifier
 
 

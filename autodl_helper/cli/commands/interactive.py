@@ -16,27 +16,10 @@ from typing import Any, Callable, Sequence, TextIO
 
 from apscheduler.schedulers.blocking import BlockingScheduler
 
-from autodl_helper.api import AutoDLClient
-from autodl_helper.auth import AuthError, alert_auth_failure, inspect_auth_state, resolve_authorization
-from autodl_helper.auth_policy import resolve_auth_runtime_policy
-from autodl_helper.config import AccountSettings, LIGHTWEIGHT_MODES, NotificationSettings, Settings, load_settings, read_raw_settings, write_raw_settings
-from autodl_helper.interactive_actions import (
-    auth_panel_rows,
-    build_dashboard_view,
-    clear_runtime_controls,
-    history_panel_rows,
-    keeper_probe_rows,
-    list_instances_panel_rows,
-    request_reload,
-    scheduled_candidate_panel_data,
-    scheduled_job_status_rows,
-    runtime_controls_snapshot,
-    set_job_enabled,
-    set_job_override,
-    set_task_enabled,
-)
-from autodl_helper.interactive_app import run_interactive
-from autodl_helper.interactive_views import render_candidate_explanation, render_dashboard
+from autodl_helper.core.api import AutoDLClient
+from autodl_helper.core.auth import AuthError, alert_auth_failure, inspect_auth_state, resolve_authorization
+from autodl_helper.core.auth import resolve_auth_runtime_policy
+from autodl_helper.core.config import AccountSettings, LIGHTWEIGHT_MODES, NotificationSettings, Settings, load_settings, read_raw_settings, write_raw_settings
 from autodl_helper.lock import FileLock, LockAcquisitionError
 from autodl_helper.notify import EmailNotifier, NotificationManager, PushPlusNotifier, ServerChanNotifier
 from autodl_helper.runtime_control import (
@@ -55,7 +38,7 @@ from autodl_helper.runtime_control import (
     scheduled_job_signature,
     task_due,
 )
-from autodl_helper.service_launchd import append_service_lifecycle_log
+from autodl_helper.services.launchd import append_service_lifecycle_log
 from autodl_helper.services.manager import (
     install_service,
     restart_service,
@@ -65,7 +48,7 @@ from autodl_helper.services.manager import (
     uninstall_service,
 )
 from autodl_helper.state import StateStore
-from autodl_helper.storage import SQLiteStore
+from autodl_helper.core.store import SQLiteStore
 from autodl_helper.tasks.keeper import evaluate_keeper_instance, format_duration_seconds, run_keeper_cycle
 from autodl_helper.tasks.scheduled_start import ScheduledStartJobRuntime, run_scheduled_start_job
 
@@ -75,13 +58,53 @@ DAEMON_HEARTBEAT_INTERVAL_SECONDS = 30
 
 
 
-from ..shared import *  # noqa: F401,F403
+from ..shared import (
+    get_enabled_accounts,
+    select_accounts,
+    create_store,
+    _account_status_label,
+    _account_source_label,
+    account_status_rows,
+    record_auth_event,
+    create_client,
+    build_client,
+    _has_config_edit_args,
+    _prompt_optional_text,
+    _prompt_optional_int,
+    _prompt_optional_bool,
+    collect_config_edit_args,
+    _ensure_account_payloads,
+    _select_account_payloads,
+    _ensure_task_payload,
+    _select_job_payloads,
+    compute_cycle_interval_seconds,
+    compute_dispatch_interval_seconds,
+    compute_interval_for_mode,
+    _sync_primary_auth,
+    _resolve_account_override_targets,
+    _resolve_job_override_targets,
+    apply_cli_overrides,
+    serialize_settings,
+    validate_settings,
+    build_named_notifiers,
+    build_notifiers,
+    probe_path_writable,
+    collect_healthcheck_errors,
+    _scheduled_start_reason_label,
+    _format_scheduled_window,
+    _format_next_check,
+    _format_local_time_label,
+    _format_keeper_window,
+    _log_scheduled_start_summary,
+)
 
-from .runtime import daemon_dispatch, run_cycle, run_keeper_only, run_scheduled_start_cycle
+from .runtime import daemon_dispatch, run_cycle, run_keeper_only, run_scheduled_start_cycle, scheduled_daemon_should_exit
 from .accounts import command_accounts, command_login
 from .instances import command_keeper_probe, command_list_instances
 from .history import command_auth_report, command_history
-from .config import _config_mtime_value, command_config_edit, command_config_resolve, command_config_show, command_healthcheck
+from .config_basic import command_config_resolve, command_config_show
+from .config_edit import command_config_edit
+from .config_runtime import _config_mtime_value, command_healthcheck
 
 def command_run_variant(
     args: argparse.Namespace,
@@ -102,7 +125,7 @@ def command_run_variant(
 ) -> int:
     try:
         settings = apply_cli_overrides(args, load_settings_fn(args.config))
-        validation_purpose = 'run-daemon' if mode == 'all' else 'run-keeper' if mode == 'keeper' else 'run-scheduled-start'
+        validation_purpose = 'run_daemon' if mode == 'all' else 'run_keeper' if mode == 'keeper' else 'run_scheduled'
         errors = validate_settings_fn(settings, purpose=validation_purpose)
         if errors:
             for error in errors:
@@ -226,100 +249,11 @@ def command_run_variant(
 
 def command_interactive(
     args: argparse.Namespace,
-    *,
-    load_settings_fn: Callable[[str], Settings] = load_settings,
-    validate_settings_fn: Callable[[Settings, str], list[str]] = validate_settings,
-    create_store_fn: Callable[[Settings], SQLiteStore] = create_store,
-    run_variant_fn: Callable[[argparse.Namespace, str], int] = command_run_variant,
-    start_background_scheduled_fn: Callable[[argparse.Namespace], tuple[int, str]] | None = None,
-    stop_background_polling_fn: Callable[[Settings, SQLiteStore], tuple[int, str]] | None = None,
-    command_config_show_fn: Callable[..., int] = command_config_show,
-    command_config_resolve_fn: Callable[..., int] = command_config_resolve,
-    command_config_edit_fn: Callable[..., int] = command_config_edit,
-    command_history_fn: Callable[..., int] = command_history,
-    command_keeper_probe_fn: Callable[..., int] = command_keeper_probe,
-    command_auth_report_fn: Callable[..., int] = command_auth_report,
-    command_list_instances_fn: Callable[..., int] = command_list_instances,
-    command_accounts_fn: Callable[..., int] = command_accounts,
-    command_login_fn: Callable[..., int] = command_login,
-    command_healthcheck_fn: Callable[..., int] = command_healthcheck,
-    list_instances_panel_rows_fn: Callable[..., list[dict[str, Any]]] | None = None,
-    history_panel_rows_fn: Callable[..., list[Any]] = history_panel_rows,
-    auth_panel_rows_fn: Callable[..., list[Any]] = auth_panel_rows,
-    build_dashboard_view_fn: Callable[..., dict[str, Any]] = build_dashboard_view,
-    render_dashboard_fn: Callable[[dict[str, Any]], str] = render_dashboard,
-    set_task_enabled_fn: Callable[..., None] = set_task_enabled,
-    set_job_enabled_fn: Callable[..., None] = set_job_enabled,
-    set_job_override_fn: Callable[..., None] = set_job_override,
-    clear_runtime_controls_fn: Callable[..., None] = clear_runtime_controls,
-    runtime_controls_snapshot_fn: Callable[..., dict[str, Any]] = runtime_controls_snapshot,
-    request_reload_fn: Callable[..., None] = request_reload,
-    run_keeper_only_fn: Callable[..., list[Any]] = run_keeper_only,
-    run_scheduled_start_cycle_fn: Callable[..., list[Any]] = run_scheduled_start_cycle,
-    scheduled_candidate_panel_data_fn: Callable[..., dict[str, Any] | None] = scheduled_candidate_panel_data,
-    keeper_probe_rows_fn: Callable[..., list[dict[str, Any]]] = keeper_probe_rows,
-    scheduled_job_status_rows_fn: Callable[..., list[dict[str, Any]]] = scheduled_job_status_rows,
-    render_candidate_explanation_fn: Callable[[dict[str, Any] | None], str] = render_candidate_explanation,
-    select_accounts_fn: Callable[..., list[AccountSettings]] = select_accounts,
-    build_client_fn: Callable[..., object] = build_client,
-    evaluate_keeper_instance_fn: Callable[..., Any] = evaluate_keeper_instance,
+    **_kwargs,
 ) -> int:
-    try:
-        if list_instances_panel_rows_fn is None:
-            def list_instances_panel_rows_fn(settings: Settings, store: SQLiteStore, *, account_name: str | None = None):
-                return list_instances_panel_rows(
-                    settings,
-                    store,
-                    account_name=account_name,
-                    select_accounts_fn=select_accounts,
-                    build_client_fn=build_client,
-                )
-        return run_interactive(
-            args,
-            load_settings_fn=load_settings_fn,
-            validate_settings_fn=validate_settings_fn,
-            create_store_fn=create_store_fn,
-            render_dashboard_fn=render_dashboard_fn,
-            build_dashboard_view_fn=build_dashboard_view_fn,
-            set_task_enabled_fn=set_task_enabled_fn,
-            set_job_enabled_fn=set_job_enabled_fn,
-            set_job_override_fn=set_job_override_fn,
-            clear_runtime_controls_fn=clear_runtime_controls_fn,
-            runtime_controls_snapshot_fn=runtime_controls_snapshot_fn,
-            request_reload_fn=request_reload_fn,
-            run_variant_fn=run_variant_fn,
-            start_background_scheduled_fn=start_background_scheduled_fn,
-            stop_background_polling_fn=stop_background_polling_fn,
-            run_keeper_only_fn=run_keeper_only_fn,
-            run_scheduled_start_cycle_fn=run_scheduled_start_cycle_fn,
-            command_config_show_fn=command_config_show_fn,
-            command_config_resolve_fn=command_config_resolve_fn,
-            command_config_edit_fn=command_config_edit_fn,
-            command_history_fn=command_history_fn,
-            command_keeper_probe_fn=command_keeper_probe_fn,
-            command_auth_report_fn=command_auth_report_fn,
-            command_list_instances_fn=command_list_instances_fn,
-            command_accounts_fn=command_accounts_fn,
-            command_login_fn=command_login_fn,
-            command_healthcheck_fn=command_healthcheck_fn,
-            list_instances_panel_rows_fn=list_instances_panel_rows_fn,
-            history_panel_rows_fn=history_panel_rows_fn,
-            auth_panel_rows_fn=auth_panel_rows_fn,
-            keeper_probe_rows_fn=lambda settings, store, *, account_name=None: keeper_probe_rows_fn(
-                settings,
-                store,
-                account_name=account_name,
-                select_accounts_fn=select_accounts_fn,
-                build_client_fn=build_client_fn,
-                evaluate_keeper_instance_fn=evaluate_keeper_instance_fn,
-            ),
-            scheduled_job_status_rows_fn=scheduled_job_status_rows_fn,
-            scheduled_candidate_panel_data_fn=scheduled_candidate_panel_data_fn,
-            render_candidate_explanation_fn=render_candidate_explanation_fn,
-        )
-    except ValueError as exc:
-        print(str(exc), file=sys.stderr)
-        return 1
+    from autodl_helper.ui import run_ui
+
+    return run_ui(args)
 
 
 __all__ = [

@@ -4,8 +4,8 @@ import argparse
 import sys
 from typing import Any, Callable
 
-from autodl_helper.config import Settings, load_settings, read_raw_settings, write_raw_settings
-from autodl_helper.storage import SQLiteStore
+from autodl_helper.core.config import Settings, load_settings, read_raw_settings, write_raw_settings
+from autodl_helper.core.store import SQLiteStore
 
 from ..shared_accounts import create_store
 from ..shared_edit import collect_config_edit_args, _ensure_task_payload, _select_account_payloads, _select_job_payloads
