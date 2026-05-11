@@ -1,7 +1,7 @@
 import json
 
-from autodl_helper import cli
-from autodl_helper.storage import AuthEventSummary
+import autodl_helper.cli.app as cli
+from autodl_helper.core.store import AuthEventSummary
 
 
 class DummyAuthStore:
@@ -27,7 +27,7 @@ def test_auth_report_outputs_json(monkeypatch, capsys):
     monkeypatch.setattr(cli, 'load_settings', lambda path: object())
     monkeypatch.setattr(cli, 'create_store', lambda settings: DummyAuthStore(rows))
 
-    code = cli.main(['auth-report', '--config', 'config.yaml', '--json'])
+    code = cli.main(['debug', 'auth', '--config', 'config.yaml', '--json'])
     captured = capsys.readouterr()
 
     assert code == 0
@@ -51,7 +51,7 @@ def test_auth_report_outputs_table(monkeypatch, capsys):
     monkeypatch.setattr(cli, 'load_settings', lambda path: object())
     monkeypatch.setattr(cli, 'create_store', lambda settings: DummyAuthStore(rows))
 
-    code = cli.main(['auth-report', '--config', 'config.yaml'])
+    code = cli.main(['debug', 'auth', '--config', 'config.yaml'])
     captured = capsys.readouterr()
 
     assert code == 0
@@ -84,7 +84,7 @@ def test_auth_report_only_unmapped_filters_rows(monkeypatch, capsys):
     monkeypatch.setattr(cli, 'load_settings', lambda path: object())
     monkeypatch.setattr(cli, 'create_store', lambda settings: DummyAuthStore(rows))
 
-    code = cli.main(['auth-report', '--config', 'config.yaml', '--only-unmapped', '--json'])
+    code = cli.main(['debug', 'auth', '--config', 'config.yaml', '--only-unmapped', '--json'])
     captured = capsys.readouterr()
 
     assert code == 0
@@ -108,7 +108,7 @@ def test_auth_report_suggest_patch_outputs_candidates(monkeypatch, capsys):
     monkeypatch.setattr(cli, 'load_settings', lambda path: object())
     monkeypatch.setattr(cli, 'create_store', lambda settings: DummyAuthStore(rows))
 
-    code = cli.main(['auth-report', '--config', 'config.yaml', '--json', '--suggest-patch'])
+    code = cli.main(['debug', 'auth', '--config', 'config.yaml', '--json', '--suggest-patch'])
     captured = capsys.readouterr()
 
     assert code == 0
@@ -141,7 +141,7 @@ def test_auth_report_only_likely_auth_filters_noise(monkeypatch, capsys):
     monkeypatch.setattr(cli, 'load_settings', lambda path: object())
     monkeypatch.setattr(cli, 'create_store', lambda settings: DummyAuthStore(rows))
 
-    code = cli.main(['auth-report', '--config', 'config.yaml', '--only-likely-auth', '--json'])
+    code = cli.main(['debug', 'auth', '--config', 'config.yaml', '--only-likely-auth', '--json'])
     captured = capsys.readouterr()
 
     assert code == 0

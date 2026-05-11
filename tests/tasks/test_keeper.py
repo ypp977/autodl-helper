@@ -8,6 +8,7 @@ class DummyClient:
         self.instances = instances
         self.opened = []
         self.closed = []
+        self.last_power_on_response = {}
 
     def list_instances(self, page=1, page_size=100):
         return self.instances
@@ -290,7 +291,10 @@ def test_run_keeper_cycle_records_failed_attempt_but_allows_retry(monkeypatch):
             'stopped_at': {'Time': '2026-04-01T10:00:00+08:00', 'Valid': True},
         }
     ])
-    client.open_machine = lambda instance_id: False
+    def open_machine(instance_id):
+        client.last_power_on_response = {'code': 'InsufficientBalance', 'msg': 'balance not enough'}
+        return False
+    client.open_machine = open_machine
     store = DummyStore(executed=False)
     monkeypatch.setattr(keeper.time, 'sleep', lambda *_args, **_kwargs: None)
 
@@ -305,6 +309,8 @@ def test_run_keeper_cycle_records_failed_attempt_but_allows_retry(monkeypatch):
 
     assert processed[0].result == 'keeper_failed_power_on'
     assert store.history[0][3] == 'keeper_failed_power_on'
+    assert store.history[0][-1]['response_code'] == 'InsufficientBalance'
+    assert store.history[0][-1]['response_msg'] == 'balance not enough'
 
 
 

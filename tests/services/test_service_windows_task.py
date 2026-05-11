@@ -1,13 +1,15 @@
 from __future__ import annotations
 
 import subprocess
+import sys
 
 from autodl_helper.services import windows_task
 
 
 def test_build_task_command_contains_run_daemon(tmp_path):
     command = windows_task.build_task_command(config_path=tmp_path / 'config.yaml')
-    assert 'run-daemon --config' in command
+    assert sys.executable in command
+    assert '-m autodl_helper run daemon --config' in command
     assert str((tmp_path / 'config.yaml').resolve()) in command
 
 

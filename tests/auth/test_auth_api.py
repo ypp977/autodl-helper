@@ -240,7 +240,7 @@ def test_build_browser_launch_kwargs_prefers_explicit_executable():
 
 
 def test_resolve_authorization_reads_and_updates_sqlite_cache(monkeypatch, tmp_path):
-    from autodl_helper.storage import SQLiteStore
+    from autodl_helper.core.store import SQLiteStore
 
     store = SQLiteStore(tmp_path / 'data.db')
     store.init_schema()

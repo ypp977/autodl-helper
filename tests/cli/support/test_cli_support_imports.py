@@ -10,7 +10,6 @@ def test_cli_support_modules_import():
         'autodl_helper.cli.shared_notifications',
         'autodl_helper.cli.shared_scheduled',
         'autodl_helper.cli.shared_settings',
-        'autodl_helper.cli.handlers',
     ]
 
     for module_name in module_names:

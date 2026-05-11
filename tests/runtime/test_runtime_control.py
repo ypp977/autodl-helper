@@ -1,7 +1,7 @@
 from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 
-from autodl_helper.config import (
+from autodl_helper.core.config import (
     AccountSettings,
     KeeperSettings,
     ScheduledStartJob,
@@ -27,7 +27,7 @@ from autodl_helper.runtime_control import (
     request_config_reload,
     task_due,
 )
-from autodl_helper.storage import SQLiteStore
+from autodl_helper.core.store import SQLiteStore
 
 
 def test_runtime_control_tables_and_task_overrides(tmp_path):

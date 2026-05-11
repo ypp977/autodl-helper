@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import subprocess
+import sys
 
 from autodl_helper.services import systemd
 
@@ -10,7 +11,7 @@ def test_build_systemd_unit_contains_expected_fields(tmp_path):
     unit = systemd.build_systemd_unit(config_path=config_path)
 
     assert 'Type=simple' in unit
-    assert 'run-daemon --config' in unit
+    assert f'ExecStart={sys.executable} -m autodl_helper run daemon --config' in unit
     assert str(config_path) in unit
     assert 'Restart=always' in unit
     assert 'StandardOutput=append:' in unit

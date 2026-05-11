@@ -1,27 +1,33 @@
 [importlinter]
 root_package = autodl_helper
 
-[importlinter:contract:interactive features must not import interactive app]
-name = Interactive features must not import app entrypoints
-type = forbidden
+[importlinter:contract:core tasks and services must not import cli or ui]
+name = Core, tasks, and services must not import CLI or UI
 source_modules =
-    autodl_helper.interactive.features
+    autodl_helper.core
+    autodl_helper.api
+    autodl_helper.auth
+    autodl_helper.config
+    autodl_helper.notify
+    autodl_helper.runtime
+    autodl_helper.services
+    autodl_helper.storage
+    autodl_helper.tasks
 forbidden_modules =
-    autodl_helper.interactive.app
-    autodl_helper.interactive_app
-
-[importlinter:contract:interactive support must not import interactive app]
-name = Interactive support must not import app entrypoints
+    autodl_helper.cli
+    autodl_helper.ui
 type = forbidden
+
+[importlinter:contract:ui must not import cli app]
+name = UI must not import CLI app
 source_modules =
-    autodl_helper.interactive.support
+    autodl_helper.ui
 forbidden_modules =
-    autodl_helper.interactive.app
-    autodl_helper.interactive_app
-
-[importlinter:contract:cli shared and commands must not import cli entrypoints]
-name = CLI shared and commands must not import cli entrypoints
+    autodl_helper.cli.app
 type = forbidden
+
+[importlinter:contract:cli internals must not import cli entrypoints]
+name = CLI internals must not import CLI entrypoints
 source_modules =
     autodl_helper.cli.shared
     autodl_helper.cli.shared_accounts
@@ -33,4 +39,4 @@ source_modules =
     autodl_helper.cli.commands
 forbidden_modules =
     autodl_helper.cli.app
-    autodl_helper.cli.handlers
+type = forbidden

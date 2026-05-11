@@ -5,6 +5,7 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[2]
+PACKAGE_ROOT = ROOT / 'autodl_helper'
 
 
 def _top_level_defs(path: Path) -> list[str]:
@@ -16,43 +17,88 @@ def _top_level_defs(path: Path) -> list[str]:
     return names
 
 
-def _import_specs(path: Path) -> list[tuple[str, str, int]]:
+def _module_name(path: Path) -> str:
+    relative = path.relative_to(ROOT).with_suffix('')
+    parts = list(relative.parts)
+    if parts[-1] == '__init__':
+        parts.pop()
+    return '.'.join(parts)
+
+
+def _resolve_from_import(path: Path, module: str, level: int) -> str:
+    if level == 0:
+        return module
+
+    current_parts = _module_name(path).split('.')
+    if path.name != '__init__.py':
+        current_parts = current_parts[:-1]
+    if level > 1:
+        current_parts = current_parts[: -(level - 1)]
+    if module:
+        current_parts.extend(module.split('.'))
+    return '.'.join(part for part in current_parts if part)
+
+
+def _import_specs(path: Path) -> list[tuple[str, str, int, int, bool]]:
     tree = ast.parse(path.read_text(encoding='utf-8'))
-    specs: list[tuple[str, str, int]] = []
+    specs: list[tuple[str, str, int, int, bool]] = []
     for node in ast.walk(tree):
         if isinstance(node, ast.Import):
             for alias in node.names:
-                specs.append(('import', alias.name, 0))
+                specs.append(('import', alias.name, 0, node.lineno, False))
         elif isinstance(node, ast.ImportFrom):
-            specs.append(('from', node.module or '', int(node.level or 0)))
+            is_star = any(alias.name == '*' for alias in node.names)
+            specs.append(('from', node.module or '', int(node.level or 0), node.lineno, is_star))
     return specs
 
 
-def _assert_no_forbidden_imports(path: Path, forbidden: set[str], forbidden_relative: set[str]) -> None:
+def _autodl_python_files() -> list[Path]:
+    return sorted(
+        path
+        for path in PACKAGE_ROOT.rglob('*.py')
+        if '__pycache__' not in path.parts
+    )
+
+
+def _assert_no_forbidden_imports(paths: list[Path], forbidden_prefixes: tuple[str, ...]) -> None:
     offenders: list[str] = []
-    for kind, module, level in _import_specs(path):
-        if kind == 'import':
-            if module in forbidden:
-                offenders.append(module)
-        elif kind == 'from':
-            if module in forbidden:
-                offenders.append(module)
-            if level and module in forbidden_relative:
-                offenders.append('.' * level + module)
-    assert not offenders, f'{path} imports forbidden entrypoints: {offenders}'
+    for path in paths:
+        for kind, module, level, lineno, _is_star in _import_specs(path):
+            imported = module if kind == 'import' else _resolve_from_import(path, module, level)
+            if any(
+                imported == prefix or imported.startswith(f'{prefix}.')
+                for prefix in forbidden_prefixes
+            ):
+                offenders.append(f'{path.relative_to(ROOT)}:{lineno} imports {imported}')
+    assert not offenders, 'forbidden architecture imports:\n' + '\n'.join(offenders)
+
+
+def test_autodl_helper_does_not_use_import_star():
+    offenders: list[str] = []
+    for path in _autodl_python_files():
+        for kind, module, level, lineno, is_star in _import_specs(path):
+            if kind == 'from' and is_star:
+                imported = _resolve_from_import(path, module, level)
+                offenders.append(f'{path.relative_to(ROOT)}:{lineno} from {imported} import *')
+    assert not offenders, 'wildcard imports are forbidden:\n' + '\n'.join(offenders)
+
+
+def test_core_tasks_and_services_do_not_import_cli_or_ui():
+    paths = [
+        *PACKAGE_ROOT.joinpath('core').rglob('*.py'),
+        *PACKAGE_ROOT.joinpath('tasks').rglob('*.py'),
+        *PACKAGE_ROOT.joinpath('services').rglob('*.py'),
+    ]
+    _assert_no_forbidden_imports(paths, ('autodl_helper.cli', 'autodl_helper.ui'))
+
+
+def test_ui_does_not_import_cli_app():
+    paths = [*PACKAGE_ROOT.joinpath('ui').rglob('*.py')]
+    _assert_no_forbidden_imports(paths, ('autodl_helper.cli.app',))
 
 
 def test_refactor_facades_stay_thin():
     thin_files = [
-        ROOT / 'autodl_helper/interactive/browse_instances.py',
-        ROOT / 'autodl_helper/interactive/browse_records.py',
-        ROOT / 'autodl_helper/interactive/menu_keeper.py',
-        ROOT / 'autodl_helper/interactive/menu_scheduled.py',
-        ROOT / 'autodl_helper/interactive/menu_diagnostics.py',
-        ROOT / 'autodl_helper/interactive/support/keeper.py',
-        ROOT / 'autodl_helper/interactive/support/scheduled.py',
-        ROOT / 'autodl_helper/interactive/screens.py',
-        ROOT / 'autodl_helper/cli/handlers.py',
         ROOT / 'autodl_helper/cli/shared.py',
     ]
 
@@ -60,16 +106,10 @@ def test_refactor_facades_stay_thin():
         assert _top_level_defs(path) == [], f'{path} should remain a thin façade'
 
 
-def test_no_import_star_back_to_interactive_app():
-    paths = [
-        *ROOT.joinpath('autodl_helper/interactive/features').rglob('*.py'),
-        *ROOT.joinpath('autodl_helper/interactive/support').rglob('*.py'),
-        ROOT / 'autodl_helper/interactive/browse_instances.py',
-        ROOT / 'autodl_helper/interactive/browse_records.py',
-        ROOT / 'autodl_helper/interactive/screens.py',
+def test_cli_boundary_modules_do_not_grow_business_helpers():
+    boundary_modules = [
+        ROOT / 'autodl_helper/cli/shared.py',
     ]
 
-    for path in paths:
-        text = path.read_text(encoding='utf-8')
-        assert 'from .app import *' not in text
-        assert 'from ..app import *' not in text
+    for path in boundary_modules:
+        assert _top_level_defs(path) == [], f'{path} should delegate, not carry business helpers'

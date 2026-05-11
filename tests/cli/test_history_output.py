@@ -1,7 +1,7 @@
 import json
 
-from autodl_helper import cli
-from autodl_helper.storage import HistoryRecord
+import autodl_helper.cli.app as cli
+from autodl_helper.core.store import HistoryRecord
 
 
 class DummyStore:
@@ -32,7 +32,7 @@ def test_command_history_outputs_json(monkeypatch, capsys):
     monkeypatch.setattr(cli, 'load_settings', lambda path: object())
     monkeypatch.setattr(cli, 'create_store', lambda settings: DummyStore(rows))
 
-    code = cli.main(['history', '--config', 'config.yaml', '--json'])
+    code = cli.main(['debug', 'history', '--config', 'config.yaml', '--json'])
     captured = capsys.readouterr()
 
     assert code == 0
@@ -61,7 +61,7 @@ def test_command_history_outputs_troubleshooting_table(monkeypatch, capsys):
     monkeypatch.setattr(cli, 'load_settings', lambda path: object())
     monkeypatch.setattr(cli, 'create_store', lambda settings: DummyStore(rows))
 
-    code = cli.main(['history', '--config', 'config.yaml'])
+    code = cli.main(['debug', 'history', '--config', 'config.yaml'])
     captured = capsys.readouterr()
 
     assert code == 0
@@ -78,7 +78,7 @@ def test_command_history_passes_event_type_filter(monkeypatch, capsys):
     monkeypatch.setattr(cli, 'load_settings', lambda path: object())
     monkeypatch.setattr(cli, 'create_store', lambda settings: store)
 
-    code = cli.main(['history', '--config', 'config.yaml', '--event-type', 'scheduled.started'])
+    code = cli.main(['debug', 'history', '--config', 'config.yaml', '--event-type', 'scheduled.started'])
     captured = capsys.readouterr()
 
     assert code == 0

@@ -44,7 +44,6 @@ def _assert_no_forbidden_imports(path: Path, forbidden: set[str], forbidden_rela
 
 def test_cli_facades_stay_thin():
     thin_files = [
-        ROOT / 'autodl_helper/cli/handlers.py',
         ROOT / 'autodl_helper/cli/shared.py',
     ]
 
@@ -53,14 +52,14 @@ def test_cli_facades_stay_thin():
 
 
 def test_cli_shared_and_command_layers_do_not_import_cli_entrypoints():
-    forbidden = {'autodl_helper.cli.app', 'autodl_helper.cli.handlers'}
-    forbidden_relative = {'app', 'handlers'}
+    forbidden = {'autodl_helper.cli.app'}
+    forbidden_relative = {'app'}
     paths = [
         *ROOT.joinpath('autodl_helper/cli').glob('shared*.py'),
         *ROOT.joinpath('autodl_helper/cli/commands').rglob('*.py'),
     ]
 
     for path in paths:
-        if path.name in {'app.py', 'handlers.py'}:
+        if path.name in {'app.py'}:
             continue
         _assert_no_forbidden_imports(path, forbidden, forbidden_relative)

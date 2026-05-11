@@ -57,3 +57,30 @@ def test_format_probe_line_only_shows_status_at_as_auxiliary_for_fallback():
     line = format_probe_line(result)
 
     assert '辅助状态时间=2026-04-08T00:17:53+08:00' in line
+
+
+def test_format_probe_line_includes_power_on_failure_response():
+    result = KeeperResult(
+        instance_id='iid',
+        status='shutdown',
+        release_at='',
+        release_source='stopped_at',
+        started_at='',
+        stopped_at='',
+        status_at='',
+        release_deadline='2026-04-23T00:17:53+08:00',
+        next_keeper_time='2026-04-22T18:17:53+08:00',
+        seconds_until_release=3600,
+        seconds_until_keeper=1800,
+        started_duration_seconds=None,
+        shutdown_duration_seconds=7200,
+        eligible=False,
+        result='keeper_failed_power_on',
+        reason='power_on_failed',
+        response_code='InsufficientBalance',
+        response_msg='balance not enough',
+    )
+
+    line = format_probe_line(result)
+
+    assert '接口返回=InsufficientBalance:balance not enough' in line

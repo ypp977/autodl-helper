@@ -1,7 +1,7 @@
 import sqlite3
 
-from autodl_helper.config import AccountSettings
-from autodl_helper.storage import SQLiteStore
+from autodl_helper.core.config import AccountSettings
+from autodl_helper.core.store import SQLiteStore
 
 
 def test_sqlite_store_initializes_schema_and_registers_accounts(tmp_path):

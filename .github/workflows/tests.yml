@@ -72,8 +72,8 @@ jobs:
         run: |
           autodl-helper --help
           python main.py --help
-          python main.py validate-config --config config.example.yaml
-          python main.py validate-config --config config.test.yaml
+          python main.py config validate --config config.example.yaml
+          python main.py config validate --config config.test.yaml
 
       - name: Run tests
         run: |

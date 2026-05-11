@@ -2,9 +2,11 @@ from types import SimpleNamespace
 from io import StringIO
 from datetime import datetime, timezone
 
-from autodl_helper import cli
-from autodl_helper import cli_handlers
-from autodl_helper.config import EmailSettings, KeeperSettings, NotificationChannelSettings, NotificationSettings, ScheduledStartJob, ScheduledStartSettings, Settings, TaskSettings
+import autodl_helper.cli.app as cli
+import autodl_helper.cli.commands.runtime as runtime_commands
+import autodl_helper.cli.commands.service as service_commands
+import autodl_helper.cli.commands as cli_backend
+from autodl_helper.core.config import EmailSettings, KeeperSettings, NotificationChannelSettings, NotificationSettings, ScheduledStartJob, ScheduledStartSettings, Settings, TaskSettings
 
 
 class DummyClient:
@@ -207,7 +209,7 @@ def test_run_scheduled_start_cycle_skips_job_after_success_in_same_window(monkey
             deadline='2026-04-09T00:30:00+08:00',
         )
 
-    monkeypatch.setattr(cli_handlers, 'datetime', FixedDateTime)
+    monkeypatch.setattr(runtime_commands, 'datetime', FixedDateTime)
     monkeypatch.setattr(cli, 'build_client', fake_build_client)
     monkeypatch.setattr(cli, 'run_scheduled_start_job', fake_scheduled_job)
 
@@ -409,6 +411,8 @@ def test_run_keeper_only_emits_window_fields(monkeypatch, tmp_path, caplog):
                 eligible=False,
                 result='skip_not_due',
                 reason='before_next_keeper_time',
+                response_code='',
+                response_msg='',
                 summary='',
             )
         ],
@@ -440,14 +444,14 @@ def test_run_keeper_only_emits_window_fields(monkeypatch, tmp_path, caplog):
 def test_command_service_start_writes_lifecycle_log(tmp_path, monkeypatch):
     config_path = tmp_path / 'config.yaml'
     config_path.write_text('tasks: {}\n')
-    monkeypatch.setattr(cli_handlers, 'service_status', lambda config_path: {'installed': True, 'running': False, 'label': 'autodl-helper'})
+    monkeypatch.setattr(service_commands, 'service_status', lambda config_path: {'installed': True, 'running': False, 'label': 'autodl-helper'})
     monkeypatch.setattr(
-        cli_handlers,
+        service_commands,
         'start_service',
         lambda config_path: SimpleNamespace(returncode=0, stdout='', stderr=''),
     )
 
-    code = cli_handlers.command_service_start(SimpleNamespace(config=str(config_path)))
+    code = cli_backend.command_service_start(SimpleNamespace(config=str(config_path)))
 
     assert code == 0
     log_text = (tmp_path / 'logs' / 'service.stdout.log').read_text()
@@ -462,7 +466,7 @@ def test_command_init_bootstraps_local_files(tmp_path, monkeypatch, capsys):
     env_template.write_text('TOKEN=\n', encoding='utf-8')
     config_template.write_text('auth:\n  authorization: Bearer token\n', encoding='utf-8')
 
-    code = cli_handlers.command_init(
+    code = cli_backend.command_init(
         SimpleNamespace(config=str(config_path), force=False, yes=False),
         validate_config_fn=lambda args: 0,
         cwd=tmp_path,
@@ -486,7 +490,7 @@ def test_command_init_preserves_existing_files_without_force(tmp_path, capsys):
     env_path.write_text('OLD=1\n', encoding='utf-8')
     config_path.write_text('custom: true\n', encoding='utf-8')
 
-    code = cli_handlers.command_init(
+    code = cli_backend.command_init(
         SimpleNamespace(config=str(config_path), force=False, yes=False),
         validate_config_fn=lambda args: 0,
         cwd=tmp_path,
@@ -510,7 +514,7 @@ def test_command_init_can_overwrite_existing_file_via_prompt(tmp_path, capsys):
     config_path.write_text('custom: true\n', encoding='utf-8')
     answers = iter(['y', 'n'])
 
-    code = cli_handlers.command_init(
+    code = cli_backend.command_init(
         SimpleNamespace(config=str(config_path), force=False, yes=False),
         validate_config_fn=lambda args: 0,
         cwd=tmp_path,
@@ -531,7 +535,7 @@ def test_command_init_can_launch_interactive_after_bootstrap(tmp_path):
     (tmp_path / 'config.example.yaml').write_text('auth:\n  authorization: Bearer token\n', encoding='utf-8')
     seen = []
 
-    code = cli_handlers.command_init(
+    code = cli_backend.command_init(
         SimpleNamespace(config=str(config_path), force=False, yes=False),
         validate_config_fn=lambda args: 0,
         launch_interactive_fn=lambda args: seen.append(args.config) or 0,
@@ -548,7 +552,7 @@ def test_command_init_returns_validation_failure(tmp_path, capsys):
     (tmp_path / '.env.template').write_text('TOKEN=\n', encoding='utf-8')
     (tmp_path / 'config.example.yaml').write_text('auth:\n  authorization: Bearer token\n', encoding='utf-8')
 
-    code = cli_handlers.command_init(
+    code = cli_backend.command_init(
         SimpleNamespace(config=str(config_path), force=False, yes=False),
         validate_config_fn=lambda args: 1,
         cwd=tmp_path,
@@ -563,9 +567,9 @@ def test_command_init_returns_validation_failure(tmp_path, capsys):
 def test_command_service_stop_writes_lifecycle_log_when_stopped(tmp_path, monkeypatch):
     config_path = tmp_path / 'config.yaml'
     config_path.write_text('tasks: {}\n')
-    monkeypatch.setattr(cli_handlers, 'service_status', lambda config_path: {'installed': True, 'running': False, 'label': 'autodl-helper'})
+    monkeypatch.setattr(service_commands, 'service_status', lambda config_path: {'installed': True, 'running': False, 'label': 'autodl-helper'})
 
-    code = cli_handlers.command_service_stop(SimpleNamespace(config=str(config_path)))
+    code = cli_backend.command_service_stop(SimpleNamespace(config=str(config_path)))
 
     assert code == 0
     log_text = (tmp_path / 'logs' / 'service.stdout.log').read_text()
@@ -589,7 +593,7 @@ def test_daemon_dispatch_emits_chinese_summary(monkeypatch, tmp_path, caplog):
     args = SimpleNamespace(config='config.yaml', headed=False, state_file=tmp_path / 'state.json', account='main')
 
     with caplog.at_level('INFO'):
-        cli_handlers.daemon_dispatch(
+        cli_backend.daemon_dispatch(
             args=args,
             load_settings_fn=lambda path: settings,
             create_store_fn=lambda settings: store,
@@ -620,7 +624,7 @@ def test_scheduled_daemon_should_exit_when_account_has_no_enabled_jobs(tmp_path)
     )
     store.upsert_scheduled_job_control('main', 'job-1', enabled=False, source='interactive')
 
-    assert cli_handlers.scheduled_daemon_should_exit(settings=settings, store=store, account_name='main') is True
+    assert cli_backend.scheduled_daemon_should_exit(settings=settings, store=store, account_name='main') is True
 
 
 def test_read_daemon_status_includes_account_and_origin(tmp_path):
@@ -661,12 +665,12 @@ def test_maybe_reload_daemon_settings_consumes_reload_request(tmp_path):
         auth_failure_backoff_seconds=None,
     )
 
-    effective = cli_handlers._maybe_reload_daemon_settings(
+    effective = cli_backend._maybe_reload_daemon_settings(
         args=args,
         store=store,
         state=state,
         load_settings_fn=lambda path: new_settings,
-        validate_settings_fn=lambda settings, purpose='run-daemon': [],
+        validate_settings_fn=lambda settings, purpose='run_daemon': [],
         mtime_fn=lambda path: 123.5,
     )
 
@@ -701,12 +705,12 @@ def test_maybe_reload_daemon_settings_keeps_last_known_good_on_invalid_config(tm
         auth_failure_backoff_seconds=None,
     )
 
-    effective = cli_handlers._maybe_reload_daemon_settings(
+    effective = cli_backend._maybe_reload_daemon_settings(
         args=args,
         store=store,
         state=state,
         load_settings_fn=lambda path: bad_settings,
-        validate_settings_fn=lambda settings, purpose='run-daemon': ['boom'],
+        validate_settings_fn=lambda settings, purpose='run_daemon': ['boom'],
         mtime_fn=lambda path: 124.0,
     )
 
