@@ -1,15 +1,26 @@
 from __future__ import annotations
 
-import json
 import sqlite3
 import time
-from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
 from ..auth.errors import classify_auth_signal
 from ..runtime.events import KEEPER_EVENT_TYPES, KEEPER_SEVERITY, SCHEDULED_EVENT_TYPES, SCHEDULED_SEVERITY
 from .models import AuthEventSummary, HistoryRecord
+from .records import (
+    dump_payload,
+    keeper_history_record,
+    legacy_scheduled_payload_matches,
+    load_payload,
+    scheduled_candidate_row,
+    scheduled_history_record,
+    scheduled_job_control_row,
+    scheduled_job_name_variants,
+    service_history_record,
+    task_control_row,
+    utc_now_iso,
+)
 
 
 class _ClosingSQLiteConnection(sqlite3.Connection):
@@ -18,42 +29,6 @@ class _ClosingSQLiteConnection(sqlite3.Connection):
             return super().__exit__(exc_type, exc_val, exc_tb)
         finally:
             self.close()
-
-
-def utc_now_iso() -> str:
-    return datetime.now(timezone.utc).isoformat()
-
-
-def _scheduled_job_name_variants(job_name: str, *, account_name: str | None = None) -> list[str]:
-    raw = str(job_name or '').strip()
-    if not raw:
-        return []
-    variants = {raw}
-    normalized = raw.split(':', 1)[-1]
-    variants.add(normalized)
-    if account_name and ':' not in raw:
-        variants.add(f'{account_name}:{raw}')
-    return sorted(variants)
-
-
-def _legacy_scheduled_payload_matches(payload: dict[str, Any], expected: dict[str, Any]) -> bool:
-    expected_target_time = str(expected.get('target_time') or '')
-    payload_target_time = str(payload.get('target_time') or '')
-    if expected_target_time and payload_target_time and payload_target_time != expected_target_time:
-        return False
-    expected_instance_id = str(expected.get('instance_id') or '')
-    if expected_instance_id:
-        payload_instance_id = str(payload.get('job_instance_id') or payload.get('configured_instance_id') or payload.get('instance_id') or '')
-        return not payload_instance_id or payload_instance_id == expected_instance_id
-    expected_selector = expected.get('selector')
-    if not isinstance(expected_selector, dict):
-        return True
-    payload_selector = payload.get('selector')
-    if isinstance(payload_selector, dict):
-        return payload_selector == expected_selector
-    expected_selector_summary = str(expected.get('selector_summary') or '')
-    payload_selector_summary = str(payload.get('selector_summary') or '')
-    return not payload_selector_summary or not expected_selector_summary or payload_selector_summary == expected_selector_summary
 
 
 class SQLiteStore:
@@ -285,7 +260,7 @@ class SQLiteStore:
                     severity,
                     summary,
                     utc_now_iso(),
-                    json.dumps(payload, ensure_ascii=False, sort_keys=True),
+                    dump_payload(payload),
                 ),
             )
 
@@ -325,7 +300,7 @@ class SQLiteStore:
                     severity,
                     summary,
                     utc_now_iso(),
-                    json.dumps(payload, ensure_ascii=False, sort_keys=True),
+                    dump_payload(payload),
                 ),
             )
 
@@ -337,7 +312,7 @@ class SQLiteStore:
                 INSERT INTO event_log(account_name, task_type, level, message, code, msg, created_at, payload)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                 """,
-                (account_name, task_type, level, message, code, msg, utc_now_iso(), json.dumps(payload or {}, ensure_ascii=False, sort_keys=True)),
+                (account_name, task_type, level, message, code, msg, utc_now_iso(), dump_payload(payload)),
             )
 
     def read_history(
@@ -351,12 +326,6 @@ class SQLiteStore:
         self.init_schema()
         with self.connect() as conn:
             records: list[HistoryRecord] = []
-
-            def _load_payload(raw: Any) -> dict[str, Any]:
-                try:
-                    return json.loads(raw or '{}')
-                except Exception:
-                    return {}
 
             if task_type in {None, 'keeper'}:
                 keeper_rows = conn.execute(
@@ -373,20 +342,7 @@ class SQLiteStore:
                         continue
                     if event_type and (row['event_type'] or '') != event_type:
                         continue
-                    records.append(
-                        HistoryRecord(
-                            created_at=row['created_at'],
-                            account_name=row['account_name'],
-                            task_type='keeper',
-                            result=row['result'],
-                            reason=row['reason'],
-                            instance_id=row['instance_id'],
-                            payload=_load_payload(row['payload']),
-                            event_type=row['event_type'] or '',
-                            severity=row['severity'] or 'info',
-                            summary=row['summary'] or '',
-                        )
-                    )
+                    records.append(keeper_history_record(row))
 
             if task_type in {None, 'scheduled_start'}:
                 scheduled_rows = conn.execute(
@@ -403,20 +359,7 @@ class SQLiteStore:
                         continue
                     if event_type and (row['event_type'] or '') != event_type:
                         continue
-                    records.append(
-                        HistoryRecord(
-                            created_at=row['created_at'],
-                            account_name=row['account_name'],
-                            task_type='scheduled_start',
-                            result=row['result'],
-                            reason=row['reason'],
-                            instance_id=row['instance_id'],
-                            payload=_load_payload(row['payload']),
-                            event_type=row['event_type'] or '',
-                            severity=row['severity'] or 'info',
-                            summary=row['summary'] or '',
-                        )
-                    )
+                    records.append(scheduled_history_record(row))
 
             if task_type in {None, 'service'}:
                 service_rows = conn.execute(
@@ -430,26 +373,13 @@ class SQLiteStore:
                     (max(limit * 4, 50),),
                 ).fetchall()
                 for row in service_rows:
-                    payload = _load_payload(row['payload'])
+                    payload = load_payload(row['payload'])
                     payload_event_type = str(payload.get('action') or '')
                     if account_name and row['account_name'] not in {'', account_name}:
                         continue
                     if event_type and payload_event_type != event_type and str(row['code'] or '') != event_type:
                         continue
-                    records.append(
-                        HistoryRecord(
-                            created_at=row['created_at'],
-                            account_name=row['account_name'],
-                            task_type='service',
-                            result=row['message'],
-                            reason=str(payload.get('detail') or row['msg'] or ''),
-                            instance_id='',
-                            payload=payload,
-                            event_type=payload_event_type or str(row['code'] or ''),
-                            severity=row['level'] or 'info',
-                            summary=row['message'] or '',
-                        )
-                    )
+                    records.append(service_history_record(row))
 
             records.sort(key=lambda item: item.created_at, reverse=True)
             return records[:limit]
@@ -506,7 +436,7 @@ class SQLiteStore:
             clauses.append('account_name = ?')
             params.append(account_name)
         if job_name:
-            variants = _scheduled_job_name_variants(str(job_name), account_name=account_name)
+            variants = scheduled_job_name_variants(str(job_name), account_name=account_name)
             placeholders = ', '.join('?' for _ in variants)
             clauses.append(f'job_name IN ({placeholders})')
             params.extend(variants)
@@ -520,21 +450,7 @@ class SQLiteStore:
         params.append(limit)
         with self.connect() as conn:
             rows = conn.execute(query, params).fetchall()
-            return [
-                {
-                    'created_at': str(row['created_at']),
-                    'account_name': str(row['account_name']),
-                    'job_name': str(row['job_name']),
-                    'instance_id': str(row['instance_id']),
-                    'result': str(row['result']),
-                    'reason': str(row['reason']),
-                    'event_type': str(row['event_type'] or ''),
-                    'severity': str(row['severity'] or 'info'),
-                    'summary': str(row['summary'] or ''),
-                    'payload': json.loads(row['payload']),
-                }
-                for row in rows
-            ]
+            return [scheduled_candidate_row(row) for row in rows]
 
     def has_scheduled_success(
         self,
@@ -546,7 +462,7 @@ class SQLiteStore:
         legacy_match_payload: dict[str, Any] | None = None,
     ) -> bool:
         self.init_schema()
-        variants = _scheduled_job_name_variants(job_name, account_name=account_name)
+        variants = scheduled_job_name_variants(job_name, account_name=account_name)
         placeholders = ', '.join('?' for _ in variants)
         with self.connect() as conn:
             rows = conn.execute(
@@ -567,13 +483,10 @@ class SQLiteStore:
             if not job_signature:
                 return True
             for row in rows:
-                try:
-                    payload = json.loads(row['payload'])
-                except Exception:
-                    payload = {}
+                payload = load_payload(row['payload'])
                 if str(payload.get('job_signature') or '').strip() == job_signature:
                     return True
-                if not str(payload.get('job_signature') or '').strip() and legacy_match_payload and _legacy_scheduled_payload_matches(payload, legacy_match_payload):
+                if not str(payload.get('job_signature') or '').strip() and legacy_match_payload and legacy_scheduled_payload_matches(payload, legacy_match_payload):
                     return True
             return False
 
@@ -639,16 +552,7 @@ class SQLiteStore:
         query += ' ORDER BY account_name, task_type'
         with self.connect() as conn:
             rows = conn.execute(query, params).fetchall()
-            return [
-                {
-                    'account_name': str(row['account_name']),
-                    'task_type': str(row['task_type']),
-                    'enabled': bool(row['enabled']),
-                    'source': str(row['source']),
-                    'updated_at': str(row['updated_at']),
-                }
-                for row in rows
-            ]
+            return [task_control_row(row) for row in rows]
 
     def upsert_scheduled_job_control(
         self,
@@ -697,15 +601,7 @@ class SQLiteStore:
             ).fetchone()
             if row is None:
                 return None
-            return {
-                'account_name': str(row['account_name']),
-                'job_name': str(row['job_name']),
-                'enabled': bool(row['enabled']),
-                'target_time_override': str(row['target_time_override'] or ''),
-                'advance_hours_override': row['advance_hours_override'],
-                'source': str(row['source']),
-                'updated_at': str(row['updated_at']),
-            }
+            return scheduled_job_control_row(row)
 
     def list_scheduled_job_controls(self, *, account_name: str | None = None) -> list[dict[str, Any]]:
         self.init_schema()
@@ -720,15 +616,4 @@ class SQLiteStore:
         query += ' ORDER BY account_name, job_name'
         with self.connect() as conn:
             rows = conn.execute(query, params).fetchall()
-            return [
-                {
-                    'account_name': str(row['account_name']),
-                    'job_name': str(row['job_name']),
-                    'enabled': bool(row['enabled']),
-                    'target_time_override': str(row['target_time_override'] or ''),
-                    'advance_hours_override': row['advance_hours_override'],
-                    'source': str(row['source']),
-                    'updated_at': str(row['updated_at']),
-                }
-                for row in rows
-            ]
+            return [scheduled_job_control_row(row) for row in rows]
