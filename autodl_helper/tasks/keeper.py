@@ -6,267 +6,24 @@ from dataclasses import replace
 from queue import Empty, Queue
 from threading import Thread
 from typing import Any, Callable
-from datetime import datetime, timedelta
+from datetime import datetime
 from uuid import uuid4
 
-from autodl_helper.core.api import ASIA_SHANGHAI
 from autodl_helper.events import enrich_keeper_result
 from autodl_helper.core.models import KeeperResult
+from autodl_helper.tasks.keeper_results import (
+    keeper_failure_category,
+    keeper_reason_label,
+    normalize_keeper_failure_reason,
+)
+from autodl_helper.tasks.keeper_timing import (
+    compute_keeper_schedule,
+    evaluate_keeper_instance,
+    format_duration_seconds,
+    normalize_now,
+)
 
 logger = logging.getLogger(__name__)
-
-SHUTDOWN_STATUSES = {"shutdown", "stopped", "off"}
-
-
-def _normalize_now(now: datetime | None) -> datetime:
-    if now is None:
-        return datetime.now(ASIA_SHANGHAI)
-    if now.tzinfo is None:
-        return ASIA_SHANGHAI.localize(now)
-    return now
-
-
-def _parse_datetime(value: str) -> datetime | None:
-    raw = (value or "").strip()
-    if not raw:
-        return None
-    try:
-        parsed = datetime.fromisoformat(raw.replace(" ", "T"))
-    except ValueError:
-        return None
-    if parsed.tzinfo is None:
-        return ASIA_SHANGHAI.localize(parsed)
-    return parsed
-
-
-def _extract_time_field(item: dict, field_name: str) -> str:
-    payload = item.get(field_name)
-    if isinstance(payload, dict):
-        if payload.get("Valid"):
-            return str(payload.get("Time", "") or "").strip()
-        return ""
-    return str(payload or "").strip()
-
-
-def _duration_seconds(now: datetime, value: str) -> int | None:
-    parsed = _parse_datetime(value)
-    if parsed is None:
-        return None
-    return max(0, int((now - parsed).total_seconds()))
-
-
-def _format_datetime(value: datetime | None) -> str:
-    if value is None:
-        return ""
-    return value.isoformat()
-
-
-def format_duration_seconds(seconds: int | None) -> str:
-    if seconds is None:
-        return "-"
-    days, remain = divmod(seconds, 24 * 60 * 60)
-    hours, remain = divmod(remain, 60 * 60)
-    minutes, secs = divmod(remain, 60)
-    parts: list[str] = []
-    if days:
-        parts.append(f"{days}d")
-    if hours or parts:
-        parts.append(f"{hours}h")
-    if minutes or parts:
-        parts.append(f"{minutes}m")
-    parts.append(f"{secs}s")
-    return " ".join(parts)
-
-
-def compute_keeper_schedule(
-    *,
-    item: dict,
-    shutdown_release_after_hours: int,
-    keeper_trigger_before_hours: int,
-    fallback_to_status_at: bool,
-) -> dict[str, str]:
-    status = str(item.get("status", "") or "").strip()
-    status_at = str(item.get("status_at", "") or "").strip()
-    stopped_at = _extract_time_field(item, "stopped_at")
-    release_source = "stopped_at" if stopped_at else "none"
-    shutdown_anchor = _parse_datetime(stopped_at)
-    if shutdown_anchor is None and fallback_to_status_at and status in SHUTDOWN_STATUSES:
-        shutdown_anchor = _parse_datetime(status_at)
-        if shutdown_anchor is not None:
-            release_source = "fallback_status_at"
-    if shutdown_anchor is None:
-        return {"release_source": "none", "release_deadline": "", "next_keeper_time": ""}
-    release_deadline_dt = shutdown_anchor + timedelta(hours=shutdown_release_after_hours)
-    next_keeper_time_dt = release_deadline_dt - timedelta(hours=keeper_trigger_before_hours)
-    return {
-        "release_source": release_source,
-        "release_deadline": _format_datetime(release_deadline_dt),
-        "next_keeper_time": _format_datetime(next_keeper_time_dt),
-    }
-
-
-def evaluate_keeper_instance(
-    *,
-    client,
-    item: dict,
-    shutdown_release_after_hours: int,
-    keeper_trigger_before_hours: int,
-    start_cooldown_minutes: int,
-    stop_cooldown_minutes: int,
-    fallback_to_status_at: bool,
-    now: datetime | None = None,
-) -> KeeperResult:
-    now = _normalize_now(now)
-    instance_id = str(item.get("uuid", "") or "").strip()
-    status = str(item.get("status", "") or "").strip()
-    release_at = str(item.get("release_at", "") or "").strip()
-    status_at = str(item.get("status_at", "") or "").strip()
-    started_at = _extract_time_field(item, "started_at")
-    stopped_at = _extract_time_field(item, "stopped_at")
-
-    if not instance_id:
-        return KeeperResult(
-            instance_id="",
-            status=status,
-            release_at=release_at,
-            release_source="none",
-            started_at=started_at,
-            stopped_at=stopped_at,
-            status_at=status_at,
-            release_deadline="",
-            next_keeper_time="",
-            seconds_until_release=None,
-            seconds_until_keeper=None,
-            started_duration_seconds=None,
-            shutdown_duration_seconds=None,
-            eligible=False,
-            result="skip_missing_instance_id",
-            reason="missing_instance_id",
-        )
-
-    started_duration_seconds = _duration_seconds(now, started_at)
-    shutdown_duration_seconds = _duration_seconds(now, stopped_at)
-    release_source = "stopped_at" if stopped_at else "none"
-    shutdown_anchor = _parse_datetime(stopped_at)
-
-    if shutdown_anchor is None and fallback_to_status_at and status in SHUTDOWN_STATUSES:
-        shutdown_anchor = _parse_datetime(status_at)
-        shutdown_duration_seconds = _duration_seconds(now, status_at)
-        if shutdown_anchor is not None:
-            release_source = "fallback_status_at"
-
-    if started_duration_seconds is None and fallback_to_status_at and status not in SHUTDOWN_STATUSES:
-        started_duration_seconds = _duration_seconds(now, status_at)
-
-    if shutdown_anchor is None:
-        return KeeperResult(
-            instance_id=instance_id,
-            status=status,
-            release_at=release_at,
-            release_source="none",
-            started_at=started_at,
-            stopped_at=stopped_at,
-            status_at=status_at,
-            release_deadline="",
-            next_keeper_time="",
-            seconds_until_release=None,
-            seconds_until_keeper=None,
-            started_duration_seconds=started_duration_seconds,
-            shutdown_duration_seconds=shutdown_duration_seconds,
-            eligible=False,
-            result="skip_missing_shutdown_time",
-            reason="missing_shutdown_time",
-        )
-
-    release_deadline_dt = shutdown_anchor + timedelta(hours=shutdown_release_after_hours)
-    next_keeper_time_dt = release_deadline_dt - timedelta(hours=keeper_trigger_before_hours)
-    seconds_until_release = max(0, int((release_deadline_dt - now).total_seconds()))
-    seconds_until_keeper = int((next_keeper_time_dt - now).total_seconds())
-
-    if seconds_until_keeper > 0:
-        return KeeperResult(
-            instance_id=instance_id,
-            status=status,
-            release_at=release_at,
-            release_source=release_source,
-            started_at=started_at,
-            stopped_at=stopped_at,
-            status_at=status_at,
-            release_deadline=_format_datetime(release_deadline_dt),
-            next_keeper_time=_format_datetime(next_keeper_time_dt),
-            seconds_until_release=seconds_until_release,
-            seconds_until_keeper=seconds_until_keeper,
-            started_duration_seconds=started_duration_seconds,
-            shutdown_duration_seconds=shutdown_duration_seconds,
-            eligible=False,
-            result="skip_not_due",
-            reason="before_next_keeper_time",
-        )
-
-    start_cooldown_seconds = max(0, start_cooldown_minutes) * 60
-    stop_cooldown_seconds = max(0, stop_cooldown_minutes) * 60
-
-    if shutdown_duration_seconds is not None and shutdown_duration_seconds < stop_cooldown_seconds:
-        reason = "fallback_status_at_recently_stopped" if release_source == "fallback_status_at" else "stopped_within_cooldown"
-        return KeeperResult(
-            instance_id=instance_id,
-            status=status,
-            release_at=release_at,
-            release_source=release_source,
-            started_at=started_at,
-            stopped_at=stopped_at,
-            status_at=status_at,
-            release_deadline=_format_datetime(release_deadline_dt),
-            next_keeper_time=_format_datetime(next_keeper_time_dt),
-            seconds_until_release=seconds_until_release,
-            seconds_until_keeper=seconds_until_keeper,
-            started_duration_seconds=started_duration_seconds,
-            shutdown_duration_seconds=shutdown_duration_seconds,
-            eligible=False,
-            result="skip_recently_stopped",
-            reason=reason,
-        )
-
-    if started_duration_seconds is not None and started_duration_seconds < start_cooldown_seconds:
-        reason = "fallback_status_at_recently_started" if release_source == "fallback_status_at" else "started_within_cooldown"
-        return KeeperResult(
-            instance_id=instance_id,
-            status=status,
-            release_at=release_at,
-            release_source=release_source,
-            started_at=started_at,
-            stopped_at=stopped_at,
-            status_at=status_at,
-            release_deadline=_format_datetime(release_deadline_dt),
-            next_keeper_time=_format_datetime(next_keeper_time_dt),
-            seconds_until_release=seconds_until_release,
-            seconds_until_keeper=seconds_until_keeper,
-            started_duration_seconds=started_duration_seconds,
-            shutdown_duration_seconds=shutdown_duration_seconds,
-            eligible=False,
-            result="skip_recently_started",
-            reason=reason,
-        )
-
-    reason = "fallback_status_at_ready" if release_source == "fallback_status_at" else "keeper_window_reached"
-    return KeeperResult(
-        instance_id=instance_id,
-        status=status,
-        release_at=release_at,
-        release_source=release_source,
-        started_at=started_at,
-        stopped_at=stopped_at,
-        status_at=status_at,
-        release_deadline=_format_datetime(release_deadline_dt),
-        next_keeper_time=_format_datetime(next_keeper_time_dt),
-        seconds_until_release=seconds_until_release,
-        seconds_until_keeper=seconds_until_keeper,
-        started_duration_seconds=started_duration_seconds,
-        shutdown_duration_seconds=shutdown_duration_seconds,
-        eligible=True,
-        result="ready",
-        reason=reason,
-    )
 
 
 def _log_keeper_result(account_name: str, result: KeeperResult) -> None:
@@ -297,6 +54,9 @@ def _store_keeper_history(
     payload = dict(result.__dict__)
     if batch_id:
         payload['batch_id'] = batch_id
+    if result.result.startswith('keeper_failed'):
+        payload['reason_label'] = keeper_reason_label(result.reason)
+        payload['failure_category'] = keeper_failure_category(result.reason)
     if extra_payload:
         payload.update(extra_payload)
     try:
@@ -459,7 +219,7 @@ def run_keeper_cycle(
     account_name: str = "default",
 ) -> list[KeeperResult]:
     results: list[KeeperResult] = []
-    now = _normalize_now(now)
+    now = normalize_now(now)
     batch_id = uuid4().hex
 
     power_on_timeout_seconds = _resolve_operation_timeout(client, power_on_timeout_seconds)
@@ -506,7 +266,8 @@ def run_keeper_cycle(
             )
             if power_on_attempt['status'] == 'timeout':
                 history_extra_payload = _best_effort_stop_loss_power_off(client, result.instance_id, power_off_timeout_seconds)
-                result = enrich_keeper_result(replace(result, eligible=False, result='keeper_failed_power_on', reason='power_on_timeout'))
+                reason = normalize_keeper_failure_reason(action='power_on', failure_kind='timeout')
+                result = enrich_keeper_result(replace(result, eligible=False, result='keeper_failed_power_on', reason=reason))
                 circuit_open = True
                 _log_keeper_guard(
                     account_name,
@@ -520,11 +281,12 @@ def run_keeper_cycle(
                     account_name=account_name,
                     result=result,
                     history_extra_payload=history_extra_payload,
-                    trigger='power_on_timeout',
+                    trigger=reason,
                 )
             elif power_on_attempt['status'] == 'exception':
                 history_extra_payload = _best_effort_stop_loss_power_off(client, result.instance_id, power_off_timeout_seconds)
-                result = enrich_keeper_result(replace(result, eligible=False, result='keeper_failed_power_on', reason='power_on_exception'))
+                reason = normalize_keeper_failure_reason(action='power_on', failure_kind='exception')
+                result = enrich_keeper_result(replace(result, eligible=False, result='keeper_failed_power_on', reason=reason))
                 circuit_open = True
                 _log_keeper_guard(
                     account_name,
@@ -538,17 +300,23 @@ def run_keeper_cycle(
                     account_name=account_name,
                     result=result,
                     history_extra_payload=history_extra_payload,
-                    trigger='power_on_exception',
+                    trigger=reason,
                 )
             elif not power_on_attempt.get('value'):
                 response_payload = getattr(client, 'last_power_on_response', {}) or {}
                 response_code = str(response_payload.get('code', '') or '')
                 response_msg = str(response_payload.get('msg', '') or '')
+                reason = normalize_keeper_failure_reason(
+                    action='power_on',
+                    failure_kind='failed',
+                    response_code=response_code,
+                    response_msg=response_msg,
+                )
                 result = enrich_keeper_result(replace(
                     result,
                     eligible=False,
                     result='keeper_failed_power_on',
-                    reason='power_on_failed',
+                    reason=reason,
                     response_code=response_code,
                     response_msg=response_msg,
                 ))
@@ -563,7 +331,8 @@ def run_keeper_cycle(
                 )
                 if power_off_attempt['status'] == 'timeout':
                     history_extra_payload = _best_effort_stop_loss_power_off(client, result.instance_id, power_off_timeout_seconds)
-                    result = enrich_keeper_result(replace(result, eligible=False, result='keeper_failed_power_off', reason='power_off_timeout'))
+                    reason = normalize_keeper_failure_reason(action='power_off', failure_kind='timeout')
+                    result = enrich_keeper_result(replace(result, eligible=False, result='keeper_failed_power_off', reason=reason))
                     circuit_open = True
                     _log_keeper_guard(
                         account_name,
@@ -577,11 +346,12 @@ def run_keeper_cycle(
                         account_name=account_name,
                         result=result,
                         history_extra_payload=history_extra_payload,
-                        trigger='power_off_timeout',
+                        trigger=reason,
                     )
                 elif power_off_attempt['status'] == 'exception':
                     history_extra_payload = _best_effort_stop_loss_power_off(client, result.instance_id, power_off_timeout_seconds)
-                    result = enrich_keeper_result(replace(result, eligible=False, result='keeper_failed_power_off', reason='power_off_exception'))
+                    reason = normalize_keeper_failure_reason(action='power_off', failure_kind='exception')
+                    result = enrich_keeper_result(replace(result, eligible=False, result='keeper_failed_power_off', reason=reason))
                     circuit_open = True
                     _log_keeper_guard(
                         account_name,
@@ -595,11 +365,27 @@ def run_keeper_cycle(
                         account_name=account_name,
                         result=result,
                         history_extra_payload=history_extra_payload,
-                        trigger='power_off_exception',
+                        trigger=reason,
                     )
                 elif not power_off_attempt.get('value'):
                     history_extra_payload = _best_effort_stop_loss_power_off(client, result.instance_id, power_off_timeout_seconds)
-                    result = enrich_keeper_result(replace(result, eligible=False, result='keeper_failed_power_off', reason='power_off_failed'))
+                    response_payload = getattr(client, 'last_power_off_response', {}) or {}
+                    response_code = str(response_payload.get('code', '') or '')
+                    response_msg = str(response_payload.get('msg', '') or '')
+                    reason = normalize_keeper_failure_reason(
+                        action='power_off',
+                        failure_kind='failed',
+                        response_code=response_code,
+                        response_msg=response_msg,
+                    )
+                    result = enrich_keeper_result(replace(
+                        result,
+                        eligible=False,
+                        result='keeper_failed_power_off',
+                        reason=reason,
+                        response_code=response_code,
+                        response_msg=response_msg,
+                    ))
                     circuit_open = True
                     _log_keeper_guard(
                         account_name,
@@ -612,7 +398,7 @@ def run_keeper_cycle(
                         account_name=account_name,
                         result=result,
                         history_extra_payload=history_extra_payload,
-                        trigger='power_off_failed',
+                        trigger=reason,
                     )
                 else:
                     time.sleep(power_off_wait_seconds)

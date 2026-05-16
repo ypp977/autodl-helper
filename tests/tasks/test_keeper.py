@@ -308,9 +308,44 @@ def test_run_keeper_cycle_records_failed_attempt_but_allows_retry(monkeypatch):
     )
 
     assert processed[0].result == 'keeper_failed_power_on'
+    assert processed[0].reason == 'insufficient_balance'
     assert store.history[0][3] == 'keeper_failed_power_on'
     assert store.history[0][-1]['response_code'] == 'InsufficientBalance'
     assert store.history[0][-1]['response_msg'] == 'balance not enough'
+    assert store.history[0][-1]['failure_category'] == 'billing'
+    assert store.history[0][-1]['reason_label'] == '余额不足或账户额度不足'
+
+
+def test_run_keeper_cycle_normalizes_auth_power_on_failure(monkeypatch):
+    client = DummyClient([
+        {
+            'uuid': 'iid-auth',
+            'status': 'shutdown',
+            'stopped_at': {'Time': '2026-04-01T10:00:00+08:00', 'Valid': True},
+        }
+    ])
+
+    def open_machine(instance_id):
+        client.last_power_on_response = {'code': 'Unauthorized', 'msg': 'token expired'}
+        return False
+
+    client.open_machine = open_machine
+    store = DummyStore(executed=False)
+    monkeypatch.setattr(keeper.time, 'sleep', lambda *_args, **_kwargs: None)
+
+    processed = keeper.run_keeper_cycle(
+        client=client,
+        shutdown_release_after_hours=24 * 15,
+        keeper_trigger_before_hours=6,
+        now=datetime(2026, 4, 16, 20, 0, 0),
+        store=store,
+        account_name='main',
+    )
+
+    assert processed[0].result == 'keeper_failed_power_on'
+    assert processed[0].reason == 'auth_failed'
+    assert store.history[0][-1]['failure_category'] == 'auth'
+    assert store.history[0][-1]['reason_label'] == '授权失效或接口拒绝登录态'
 
 
 

@@ -5,6 +5,7 @@ from collections import Counter
 from typing import Any, Callable
 
 from autodl_helper.core.auth import AuthError
+from autodl_helper.tasks.keeper_results import keeper_reason_label
 
 from .render import BLUE, CYAN, GREEN, RED, clear_screen, color, print_numbered_menu, render_notice, render_section
 
@@ -146,7 +147,7 @@ def run_keeper_once(
     progress_line = f'进度 {progress} {progress_percent}%'
     if failed_results:
         reason_counts = Counter(
-            str(getattr(result, 'reason', '') or result_label_fn(getattr(result, 'result', '')) or '-')
+            keeper_reason_label(str(getattr(result, 'reason', '') or result_label_fn(getattr(result, 'result', '')) or '-'))
             for result in failed_results
         )
         reason_text = ', '.join(f'{reason} x{count}' for reason, count in reason_counts.most_common(3))

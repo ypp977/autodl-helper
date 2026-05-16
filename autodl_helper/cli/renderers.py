@@ -8,6 +8,7 @@ from typing import Sequence
 from autodl_helper.core.auth import AUTH_CODE_SIGNALS, AUTH_MESSAGE_SIGNALS
 from autodl_helper.core.models import AuthEventSummary, HistoryRecord, KeeperResult
 from autodl_helper.tasks.keeper import compute_keeper_schedule, format_duration_seconds
+from autodl_helper.tasks.keeper_results import keeper_reason_label
 
 
 GPU_SPEC_RE = re.compile(r'(?P<model>.+?)\s*[*×x]\s*(?P<count>\d+)\s*(?:卡)?\s*$')
@@ -188,7 +189,7 @@ def probe_result_label(value: str) -> str:
 
 
 def probe_reason_label(value: str) -> str:
-    return {
+    labels = {
         'before_next_keeper_time': '还没到下次 keeper 时间',
         'stopped_within_cooldown': '最近关机时间未超过冷却窗口',
         'started_within_cooldown': '最近启动时间未超过冷却窗口',
@@ -201,7 +202,8 @@ def probe_reason_label(value: str) -> str:
         'power_on_failed': '开机接口执行失败',
         'power_off_failed': '关机接口执行失败',
         'missing_instance_id': '实例缺少 uuid',
-    }.get(value, value)
+    }
+    return labels.get(value, keeper_reason_label(value))
 
 
 def _keeper_response_suffix(result: KeeperResult) -> str:

@@ -3,6 +3,8 @@ from __future__ import annotations
 from dataclasses import replace
 from typing import TYPE_CHECKING
 
+from autodl_helper.tasks.keeper_results import keeper_reason_label
+
 if TYPE_CHECKING:
     from ..storage.models import KeeperResult, ScheduledStartResult
 
@@ -69,9 +71,10 @@ def _format_keeper_summary(result: 'KeeperResult') -> str:
         return f'当前释放周期已执行；释放时间={deadline}'
     if result.result in {'keeper_failed_power_on', 'keeper_failed_power_off'}:
         extra = []
+        extra.append(f'原因={keeper_reason_label(result.reason)}')
         if result.response_code or result.response_msg:
             extra.append(f'接口返回={result.response_code or "-"}:{result.response_msg or "-"}')
-        suffix = f'；{"；".join(extra)}' if extra else ''
+        suffix = f'；{"；".join(extra)}'
         return f'keeper 执行失败；状态={status}；释放时间={deadline}{suffix}'
     if result.result == 'skip_not_due':
         return f'未到 keeper 窗口；下次keeper={next_keeper}；释放时间={deadline}'

@@ -307,7 +307,7 @@ def test_run_ui_keeper_once_shows_failure_reason_summary(tmp_path, capsys, monke
     captured = capsys.readouterr()
 
     assert code == 0
-    assert '失败 power_on_failed x2' in captured.out
+    assert '失败 开机失败 x2' in captured.out
     assert '失败示例' not in captured.out
     assert 'iid-1:power_on_failed' not in captured.out
 
