@@ -160,6 +160,12 @@ def validate_settings(
             errors.append('keeper.keeper_trigger_before_hours must be zero or a positive integer.')
         if keeper.keeper_trigger_before_hours >= keeper.shutdown_release_after_hours:
             errors.append('keeper.keeper_trigger_before_hours must be smaller than shutdown_release_after_hours.')
+        if keeper.interval_minutes <= 0:
+            errors.append('keeper.interval_minutes must be a positive integer.')
+        if keeper.power_on_wait_seconds < 0:
+            errors.append('keeper.power_on_wait_seconds must be zero or a positive integer.')
+        if keeper.power_off_wait_seconds < 0:
+            errors.append('keeper.power_off_wait_seconds must be zero or a positive integer.')
         if keeper.start_cooldown_minutes < 0:
             errors.append('keeper.start_cooldown_minutes must be zero or a positive integer.')
         if keeper.stop_cooldown_minutes < 0:

@@ -429,6 +429,7 @@ def run_ui(args: Any, *, input_fn=builtins.input) -> int:
                 select_accounts_fn=select_accounts,
                 account_status_rows_fn=account_status_rows,
                 resolve_authorization_fn=resolve_authorization,
+                build_client_fn=build_client,
             )
         elif choice == '4':
             notice = run_keeper_menu(

@@ -244,6 +244,7 @@ def print_account_menu(
         ('1', '刷新账号状态'),
         ('2', '登录当前账号'),
         ('3', '登录全部账号'),
+        ('4', '账号健康检查'),
         ('0', '返回'),
     ])
 
@@ -290,6 +291,42 @@ def login_accounts(
     return f'账号登录完成: 成功 {ok} 个 | 失败 0 个'
 
 
+def check_account_health(
+    args: Any,
+    *,
+    load_settings_fn: Callable[[str], Any],
+    store_cls: type,
+    select_accounts_fn: Callable[..., list[Any]],
+    build_client_fn: Callable[..., Any],
+) -> str:
+    config_path = str(getattr(args, 'config', 'config.yaml'))
+    try:
+        settings = load_settings_fn(config_path)
+        store = store_cls(settings.storage.database_file)
+        store.init_schema()
+        accounts = select_accounts_fn(settings, getattr(args, 'account', None))
+    except Exception as exc:
+        return f'账号健康检查失败: {exc}'
+
+    ok: list[str] = []
+    failed: list[str] = []
+    for account in accounts:
+        try:
+            client = build_client_fn(settings, bool(getattr(args, 'headed', False)), account=account, store=store)
+            instances = list(client.list_instances())
+            ok.append(f'{account.name}({len(instances)} 台)')
+        except Exception as exc:
+            failed.append(f'{account.name}: {exc}')
+
+    summary = f'账号健康检查: 正常 {len(ok)} 个 | 异常 {len(failed)} 个'
+    details: list[str] = []
+    if ok:
+        details.append('正常 ' + ', '.join(ok[:3]))
+    if failed:
+        details.append('异常 ' + '; '.join(failed[:3]))
+    return summary if not details else f'{summary} | {" | ".join(details)}'
+
+
 def run_account_menu(
     args: Any,
     *,
@@ -299,6 +336,7 @@ def run_account_menu(
     select_accounts_fn: Callable[..., list[Any]],
     account_status_rows_fn: Callable[..., list[dict[str, Any]]],
     resolve_authorization_fn: Callable[..., Any],
+    build_client_fn: Callable[..., Any],
 ) -> str:
     notice = ''
     while True:
@@ -337,7 +375,16 @@ def run_account_menu(
                 resolve_authorization_fn=resolve_authorization_fn,
             )
             continue
-        notice = '无效选择，请输入 1/2/3/0'
+        if choice == '4':
+            notice = check_account_health(
+                args,
+                load_settings_fn=load_settings_fn,
+                store_cls=store_cls,
+                select_accounts_fn=select_accounts_fn,
+                build_client_fn=build_client_fn,
+            )
+            continue
+        notice = '无效选择，请输入 1/2/3/4/0'
 
 
 def run_daemon_control_menu(

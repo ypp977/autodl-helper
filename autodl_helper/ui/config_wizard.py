@@ -87,16 +87,53 @@ def keeper_payload(payload: dict[str, Any]) -> dict[str, Any]:
     return keeper
 
 
+def _payload_int(keeper: dict[str, Any], key: str, *, label: str, errors: list[str]) -> int | None:
+    try:
+        return int(keeper.get(key, 0) or 0)
+    except (TypeError, ValueError):
+        errors.append(f'tasks.keeper.{key} must be an integer. ({label})')
+        return None
+
+
 def validate_keeper_payload(keeper: dict[str, Any]) -> list[str]:
     errors: list[str] = []
-    shutdown_release_after_hours = int(keeper.get('shutdown_release_after_hours', 0) or 0)
-    keeper_trigger_before_hours = int(keeper.get('keeper_trigger_before_hours', 0) or 0)
-    if shutdown_release_after_hours <= 0:
+    shutdown_release_after_hours = _payload_int(
+        keeper,
+        'shutdown_release_after_hours',
+        label='释放窗口(小时)',
+        errors=errors,
+    )
+    keeper_trigger_before_hours = _payload_int(
+        keeper,
+        'keeper_trigger_before_hours',
+        label='到期前触发保活(小时)',
+        errors=errors,
+    )
+    interval_minutes = _payload_int(keeper, 'interval_minutes', label='检查间隔(分钟)', errors=errors)
+    power_on_wait_seconds = _payload_int(keeper, 'power_on_wait_seconds', label='开机等待(秒)', errors=errors)
+    power_off_wait_seconds = _payload_int(keeper, 'power_off_wait_seconds', label='关机等待(秒)', errors=errors)
+    start_cooldown_minutes = _payload_int(keeper, 'start_cooldown_minutes', label='开机冷却(分钟)', errors=errors)
+    stop_cooldown_minutes = _payload_int(keeper, 'stop_cooldown_minutes', label='关机冷却(分钟)', errors=errors)
+    if shutdown_release_after_hours is not None and shutdown_release_after_hours <= 0:
         errors.append('tasks.keeper.shutdown_release_after_hours must be a positive integer.')
-    if keeper_trigger_before_hours < 0:
+    if keeper_trigger_before_hours is not None and keeper_trigger_before_hours < 0:
         errors.append('tasks.keeper.keeper_trigger_before_hours must be zero or a positive integer.')
-    if keeper_trigger_before_hours >= shutdown_release_after_hours:
+    if (
+        keeper_trigger_before_hours is not None
+        and shutdown_release_after_hours is not None
+        and keeper_trigger_before_hours >= shutdown_release_after_hours
+    ):
         errors.append('tasks.keeper.keeper_trigger_before_hours must be smaller than shutdown_release_after_hours.')
+    if interval_minutes is not None and interval_minutes <= 0:
+        errors.append('tasks.keeper.interval_minutes must be a positive integer.')
+    for key, value in (
+        ('power_on_wait_seconds', power_on_wait_seconds),
+        ('power_off_wait_seconds', power_off_wait_seconds),
+        ('start_cooldown_minutes', start_cooldown_minutes),
+        ('stop_cooldown_minutes', stop_cooldown_minutes),
+    ):
+        if value is not None and value < 0:
+            errors.append(f'tasks.keeper.{key} must be zero or a positive integer.')
     return errors
 
 

@@ -449,6 +449,37 @@ def test_run_ui_account_menu_uses_page_style_notice_and_clear(tmp_path, capsys, 
     assert '账号管理' in captured.out
 
 
+def test_run_ui_account_menu_can_run_health_check(tmp_path, capsys, monkeypatch):
+    db_path = tmp_path / 'data' / 'autodl-helper.db'
+    config_path = tmp_path / 'config.yaml'
+    config_path.write_text(
+        '\n'.join([
+            'accounts:',
+            '  - name: main',
+            '    enabled: true',
+            '    authorization: Bearer token',
+            'storage:',
+            f'  database_file: {db_path}',
+        ]),
+        encoding='utf-8',
+    )
+
+    class DummyClient:
+        def list_instances(self):
+            return [{'uuid': 'iid-1'}, {'uuid': 'iid-2'}]
+
+    monkeypatch.setattr('autodl_helper.ui.app.service_status', lambda config_path: {'status_label': '未安装', 'running': False})
+    monkeypatch.setattr('autodl_helper.ui.app.build_client', lambda *args, **kwargs: DummyClient())
+    inputs = iter(['3', '4', '0', '0'])
+
+    code = run_ui(SimpleNamespace(command='ui', config=str(config_path)), input_fn=lambda prompt='': next(inputs))
+    captured = capsys.readouterr()
+
+    assert code == 0
+    assert '账号健康检查' in captured.out
+    assert '账号健康检查: 正常 1 个 | 异常 0 个 | 正常 main(2 台)' in captured.out
+
+
 def test_run_ui_can_resume_paused_keeper(tmp_path, capsys, monkeypatch):
     db_path = tmp_path / 'data' / 'autodl-helper.db'
     config_path = tmp_path / 'config.yaml'

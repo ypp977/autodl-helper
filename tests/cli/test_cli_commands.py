@@ -450,6 +450,30 @@ def test_validate_config_rejects_keeper_window_misconfiguration():
     assert any('smaller than shutdown_release_after_hours' in err for err in errors)
 
 
+def test_validate_config_rejects_invalid_keeper_runtime_values():
+    settings = Settings(
+        auth=AuthSettings(authorization='Bearer token'),
+        tasks=TaskSettings(
+            keeper=KeeperSettings(
+                enabled=True,
+                interval_minutes=0,
+                power_on_wait_seconds=-1,
+                power_off_wait_seconds=-1,
+                start_cooldown_minutes=-1,
+                stop_cooldown_minutes=-1,
+            ),
+        ),
+    )
+
+    errors = cli.validate_settings(settings)
+
+    assert any('interval_minutes' in err for err in errors)
+    assert any('power_on_wait_seconds' in err for err in errors)
+    assert any('power_off_wait_seconds' in err for err in errors)
+    assert any('start_cooldown_minutes' in err for err in errors)
+    assert any('stop_cooldown_minutes' in err for err in errors)
+
+
 def test_run_daemon_subcommand_invokes_variant_runner(monkeypatch):
     calls = []
     monkeypatch.setattr(cli, '_command_run_variant', lambda args, mode: calls.append((args.command, mode)) or 0)
