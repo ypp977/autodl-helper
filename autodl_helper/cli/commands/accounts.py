@@ -51,6 +51,7 @@ from autodl_helper.state import StateStore
 from autodl_helper.core.store import SQLiteStore
 from autodl_helper.tasks.keeper import evaluate_keeper_instance, format_duration_seconds, run_keeper_cycle
 from autodl_helper.tasks.scheduled_start import ScheduledStartJobRuntime, run_scheduled_start_job
+from autodl_helper.cli.output import print_json_error
 
 logger = logging.getLogger(__name__)
 TIME_RE = re.compile(r'^(?:[01]\d|2[0-3]):[0-5]\d$')
@@ -110,6 +111,9 @@ def command_accounts(
     try:
         rows = account_status_rows_fn(settings, store, account_name=getattr(args, 'account', None))
     except ValueError as exc:
+        if getattr(args, 'json', False):
+            print_json_error('account_error', str(exc))
+            return 1
         print(str(exc), file=sys.stderr)
         return 1
     if getattr(args, 'json', False):

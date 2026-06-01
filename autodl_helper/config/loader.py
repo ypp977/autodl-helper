@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import tempfile
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -174,7 +175,19 @@ def read_raw_settings(config_path: str | Path | None = None) -> dict[str, Any]:
 def write_raw_settings(config_path: str | Path, payload: dict[str, Any]) -> None:
     path = Path(config_path)
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(yaml.safe_dump(payload, allow_unicode=True, sort_keys=False), encoding='utf-8')
+    text = yaml.safe_dump(payload, allow_unicode=True, sort_keys=False)
+    with tempfile.NamedTemporaryFile('w', encoding='utf-8', dir=path.parent, prefix=f'.{path.name}.', suffix='.tmp', delete=False) as tmp:
+        tmp_path = Path(tmp.name)
+        tmp.write(text)
+    try:
+        os.chmod(tmp_path, 0o600)
+    except OSError:
+        pass
+    os.replace(tmp_path, path)
+    try:
+        os.chmod(path, 0o600)
+    except OSError:
+        pass
 
 
 def _env_int(name: str, default: int) -> int:

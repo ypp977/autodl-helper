@@ -9,6 +9,7 @@ import pytz
 import requests
 
 from ..auth.errors import extract_code_msg, is_business_auth_failure
+from ..security import redact_sensitive, redact_text
 
 INSTANCE_URL = "https://www.autodl.com/api/v1/instance"
 POWER_ON_URL = "https://www.autodl.com/api/v1/instance/power_on"
@@ -83,7 +84,7 @@ class AutoDLClient:
             if str(code or '').strip().lower() != 'success' and (code or msg):
                 self._emit_auth_failure_event(payload)
             if is_business_auth_failure(payload):
-                logger.warning("AutoDL 业务层鉴权失败: code=%s msg=%s", code, msg)
+                logger.warning("AutoDL 业务层鉴权失败: code=%s msg=%s", redact_text(code, max_length=120), redact_text(msg))
                 if not refreshed and self._refresh_authorization():
                     refreshed = True
                     continue
@@ -93,14 +94,14 @@ class AutoDLClient:
         body = {"instance_uuid": str(instance_uuid), "payload": payload}
         result = self.post_json(POWER_ON_URL, body)
         self.last_power_on_response = result
-        logger.info("uuid=%s power_on response=%s", instance_uuid, result)
+        logger.info("uuid=%s power_on response=%s", instance_uuid, redact_sensitive(result))
         return result.get("code") == "Success"
 
     def close_machine(self, instance_uuid: str) -> bool:
         payload = {"instance_uuid": str(instance_uuid)}
         result = self.post_json(POWER_OFF_URL, payload)
         self.last_power_off_response = result
-        logger.info("uuid=%s power_off response=%s", instance_uuid, result)
+        logger.info("uuid=%s power_off response=%s", instance_uuid, redact_sensitive(result))
         return result.get("code") == "Success"
 
     def list_instances(self, page: int = 1, page_size: int = 100) -> list[dict[str, Any]]:
@@ -114,7 +115,7 @@ class AutoDLClient:
         }
         result = self.post_json(INSTANCE_URL, body)
         if result.get("code") != "Success":
-            raise RuntimeError(f"failed to list instances: {result}")
+            raise RuntimeError(f"failed to list instances: {redact_text(redact_sensitive(result))}")
         return result.get("data", {}).get("list", [])
 
     @staticmethod

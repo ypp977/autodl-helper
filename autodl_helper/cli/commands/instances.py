@@ -51,6 +51,7 @@ from autodl_helper.state import StateStore
 from autodl_helper.core.store import SQLiteStore
 from autodl_helper.tasks.keeper import evaluate_keeper_instance, format_duration_seconds, run_keeper_cycle
 from autodl_helper.tasks.scheduled_start import ScheduledStartJobRuntime, run_scheduled_start_job
+from autodl_helper.cli.output import print_json_error
 
 logger = logging.getLogger(__name__)
 TIME_RE = re.compile(r'^(?:[01]\d|2[0-3]):[0-5]\d$')
@@ -155,6 +156,9 @@ def command_list_instances(
     settings = load_settings_fn(args.config)
     errors = validate_settings_fn(settings, purpose='list')
     if errors:
+        if getattr(args, 'json', False):
+            print_json_error('validation_error', 'Validation failed.', details={'errors': errors})
+            return 1
         for error in errors:
             print(error, file=sys.stderr)
         return 1

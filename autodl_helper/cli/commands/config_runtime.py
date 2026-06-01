@@ -9,6 +9,7 @@ from typing import Any, Callable
 from autodl_helper.core.config import Settings, load_settings
 from autodl_helper.core.store import SQLiteStore
 
+from ..output import print_json, print_json_error, json_ok
 from ..shared_healthcheck import collect_healthcheck_errors
 from ..shared_settings import apply_cli_overrides, validate_settings
 from autodl_helper.runtime_control import mark_config_reload_failure, mark_config_reload_success, read_config_reload_status
@@ -82,10 +83,16 @@ def command_healthcheck(
         headed=args.headed,
     )
     if errors:
+        if getattr(args, 'json', False):
+            print_json_error('healthcheck_failed', 'Healthcheck failed.', details={'errors': errors})
+            return 1
         print('Healthcheck failed:', file=sys.stderr)
         for error in errors:
             print(f'- {error}', file=sys.stderr)
         return 1
+    if getattr(args, 'json', False):
+        print_json(json_ok({'status': 'ok'}))
+        return 0
     print('Healthcheck OK.')
     return 0
 

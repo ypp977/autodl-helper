@@ -6,6 +6,7 @@ from autodl_helper.core.api import AutoDLClient
 from autodl_helper.core.auth import inspect_auth_state, resolve_authorization
 from autodl_helper.core.config import AccountSettings, Settings
 from autodl_helper.core.store import SQLiteStore
+from autodl_helper.security import redact_sensitive, redact_text
 
 
 def get_enabled_accounts(settings: Settings) -> list[AccountSettings]:
@@ -118,8 +119,9 @@ def account_status_rows(
 def record_auth_event(store: SQLiteStore | None, account_name: str, payload: dict[str, object]) -> None:
     if store is None:
         return
-    code = str(payload.get('code', '') or '')
-    msg = str(payload.get('msg', '') or '')
+    sanitized = redact_sensitive(dict(payload))
+    code = redact_text(sanitized.get('code', ''), max_length=120)
+    msg = redact_text(sanitized.get('msg', ''), max_length=500)
     store.add_event(
         account_name,
         'auth',
@@ -127,7 +129,7 @@ def record_auth_event(store: SQLiteStore | None, account_name: str, payload: dic
         '命中鉴权失败刷新判定',
         code=code,
         msg=msg,
-        payload=dict(payload),
+        payload=sanitized,
     )
 
 

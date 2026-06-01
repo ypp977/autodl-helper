@@ -9,6 +9,7 @@ from typing import Callable
 
 from autodl_helper.core.config import Settings, load_settings
 
+from ..output import print_json, print_json_error, json_ok
 from ..shared_settings import apply_cli_overrides, serialize_settings, validate_settings
 
 
@@ -79,9 +80,9 @@ def command_init(
     print('[4/4] Ready')
     print('Bootstrap complete.')
     print('Next:')
-    print(f'  python main.py ui --config {config_path.name}')
-    print(f'  python main.py login --config {config_path.name} --account <account-name>')
-    print(f'  python main.py service install --config {config_path.name}')
+    print(f'  autodl-helper ui --config {config_path.name}')
+    print(f'  autodl-helper login --config {config_path.name} --account <account-name>')
+    print(f'  autodl-helper service install --config {config_path.name}')
 
     if launch_interactive_fn is not None and not getattr(args, 'yes', False):
         answer = str(input_fn('Launch UI now? [y/N]: ')).strip().lower()
@@ -102,13 +103,22 @@ def command_validate_config(
         settings = apply_cli_overrides(args, load_settings_fn(args.config))
         errors = validate_settings_fn(settings, purpose='validate')
         if errors:
+            if getattr(args, 'json', False):
+                print_json_error('config_invalid', 'Configuration invalid.', details={'errors': errors})
+                return 1
             print('Configuration invalid:', file=sys.stderr)
             for error in errors:
                 print(f'- {error}', file=sys.stderr)
             return 1
+        if getattr(args, 'json', False):
+            print_json(json_ok({'status': 'valid'}))
+            return 0
         print('Configuration valid.')
         return 0
     except ValueError as exc:
+        if getattr(args, 'json', False):
+            print_json_error('config_error', str(exc))
+            return 1
         print(str(exc), file=sys.stderr)
         return 1
 
@@ -123,6 +133,9 @@ def command_config_show(
         print(json.dumps(serialize_settings(settings, resolved=False, account_name=getattr(args, 'account', None)), ensure_ascii=False, indent=2))
         return 0
     except ValueError as exc:
+        if getattr(args, 'json', False):
+            print_json_error('config_error', str(exc))
+            return 1
         print(str(exc), file=sys.stderr)
         return 1
 
@@ -136,10 +149,16 @@ def command_config_resolve(
     try:
         settings = apply_cli_overrides(args, load_settings_fn(args.config))
     except ValueError as exc:
+        if getattr(args, 'json', False):
+            print_json_error('config_error', str(exc))
+            return 1
         print(str(exc), file=sys.stderr)
         return 1
     errors = validate_settings_fn(settings, purpose='validate')
     if errors:
+        if getattr(args, 'json', False):
+            print_json_error('config_invalid', 'Configuration invalid.', details={'errors': errors})
+            return 1
         print('Configuration invalid:', file=sys.stderr)
         for error in errors:
             print(f'- {error}', file=sys.stderr)

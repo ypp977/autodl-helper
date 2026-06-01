@@ -111,6 +111,24 @@ def test_accounts_command_delegates_to_handler(monkeypatch):
     assert calls == [('accounts', 'main', True)]
 
 
+def test_accounts_json_error_uses_envelope(monkeypatch, capsys):
+    monkeypatch.setattr(cli, 'load_settings', lambda path: Settings(auth=AuthSettings(authorization='Bearer token')))
+    monkeypatch.setattr(cli, 'create_store', lambda settings: object())
+
+    code = cli_backend.command_accounts(
+        argparse.Namespace(config='config.yaml', account='missing', json=True),
+        load_settings_fn=cli.load_settings,
+        create_store_fn=cli.create_store,
+        account_status_rows_fn=lambda *args, **kwargs: (_ for _ in ()).throw(ValueError('Account not found or disabled: missing')),
+    )
+    captured = capsys.readouterr()
+
+    assert code == 1
+    payload = json.loads(captured.err)
+    assert payload['ok'] is False
+    assert payload['error']['code'] == 'account_error'
+
+
 def test_init_command_delegates_to_handler(monkeypatch):
     calls = []
     monkeypatch.setattr(cli, '_command_init', lambda args: calls.append((args.command, args.config, args.force, args.yes)) or 0)
@@ -124,12 +142,12 @@ def test_init_command_delegates_to_handler(monkeypatch):
 
 def test_healthcheck_command_delegates_to_handler(monkeypatch):
     calls = []
-    monkeypatch.setattr(cli, '_command_healthcheck', lambda args: calls.append(args.command) or 0)
+    monkeypatch.setattr(cli, '_command_healthcheck', lambda args: calls.append((args.command, args.json)) or 0)
 
-    code = cli.main(['debug', 'health', '--config', 'config.yaml'])
+    code = cli.main(['debug', 'health', '--config', 'config.yaml', '--json'])
 
     assert code == 0
-    assert calls == ['debug']
+    assert calls == [('debug', True)]
 
 
 def test_service_install_command_delegates_to_handler(monkeypatch):
@@ -183,6 +201,15 @@ def test_main_sets_apscheduler_logger_to_warning(monkeypatch):
     assert logging.WARNING in seen
 
 
+def test_detached_popen_kwargs_uses_platform_specific_process_group(monkeypatch):
+    monkeypatch.setattr(cli.os, 'name', 'posix')
+    assert cli._detached_popen_kwargs() == {'start_new_session': True}
+
+    monkeypatch.setattr(cli.os, 'name', 'nt')
+    assert cli._detached_popen_kwargs() == {
+        'creationflags': getattr(cli.subprocess, 'CREATE_NEW_PROCESS_GROUP', 0x00000200)
+    }
+
 
 def test_list_instances_outputs_json(monkeypatch, capsys):
     instances = [
@@ -210,6 +237,31 @@ def test_list_instances_outputs_json(monkeypatch, capsys):
     assert payload[0]['instance_id'] == 'iid-1'
     assert payload[0]['name'] == 'alpha'
     assert payload[0]['spec'] == 'RTX 3080 Ti * 8卡'
+
+
+def test_list_instances_json_validation_error_uses_envelope(monkeypatch, capsys):
+    settings = Settings(auth=AuthSettings(authorization='Bearer token'))
+    monkeypatch.setattr(cli, 'load_settings', lambda path: settings)
+
+    code = cli_backend.command_list_instances(
+        argparse.Namespace(config='config.yaml', account=None, headed=False, json=True),
+        load_settings_fn=cli.load_settings,
+        validate_settings_fn=lambda settings, purpose: ['bad config'],
+        create_store_fn=cli.create_store,
+        select_accounts_fn=cli.select_accounts,
+        build_client_fn=cli.build_client,
+        get_enabled_accounts_fn=cli.get_enabled_accounts,
+        normalize_instance_fn=cli.normalize_instance,
+        format_instances_table_fn=cli.format_instances_table,
+        normalize_instance_debug_fn=cli.normalize_instance_debug,
+    )
+    captured = capsys.readouterr()
+
+    assert code == 1
+    payload = json.loads(captured.err)
+    assert payload['ok'] is False
+    assert payload['error']['code'] == 'validation_error'
+    assert payload['error']['details']['errors'] == ['bad config']
 
 
 def test_login_command_refreshes_selected_account(monkeypatch, capsys, tmp_path):
@@ -379,6 +431,32 @@ def test_validate_config_command_prints_errors(monkeypatch, capsys):
 
     assert code == 1
     assert 'configuration invalid' in captured.err.lower()
+
+
+def test_validate_config_json_outputs_error_envelope(monkeypatch, capsys):
+    settings = Settings(auth=AuthSettings())
+    monkeypatch.setattr(cli, 'load_settings', lambda path: settings)
+
+    code = cli.main(['config', 'validate', '--config', 'config.yaml', '--json'])
+    captured = capsys.readouterr()
+
+    assert code == 1
+    payload = json.loads(captured.err)
+    assert payload['ok'] is False
+    assert payload['error']['code'] == 'config_invalid'
+    assert payload['error']['details']['errors']
+
+
+def test_validate_config_json_outputs_ok_envelope(monkeypatch, capsys):
+    settings = Settings(auth=AuthSettings(authorization='Bearer token'))
+    monkeypatch.setattr(cli, 'load_settings', lambda path: settings)
+
+    code = cli.main(['config', 'validate', '--config', 'config.yaml', '--json'])
+    captured = capsys.readouterr()
+
+    assert code == 0
+    payload = json.loads(captured.out)
+    assert payload == {'ok': True, 'data': {'status': 'valid'}}
 
 
 def test_validate_config_allows_five_second_scheduled_polling():
@@ -661,12 +739,47 @@ def test_start_background_scheduled_polling_enters_fused_state_after_repeated_fa
 
 def test_db_check_command_delegates_to_handler(monkeypatch):
     calls = []
-    monkeypatch.setattr(cli, '_command_db_check', lambda args: calls.append(args.command) or 0)
+    monkeypatch.setattr(cli, '_command_db_check', lambda args: calls.append((args.command, args.json)) or 0)
 
-    code = cli.main(['debug', 'db', '--config', 'config.yaml'])
+    code = cli.main(['debug', 'db', '--config', 'config.yaml', '--json'])
 
     assert code == 0
-    assert calls == ['debug']
+    assert calls == [('debug', True)]
+
+
+def test_db_check_json_outputs_ok_envelope(tmp_path, capsys):
+    settings = Settings(auth=AuthSettings(authorization='Bearer token'))
+    settings.storage.database_file = str(tmp_path / 'data.db')
+    args = argparse.Namespace(config='config.yaml', json=True)
+
+    code = cli_backend.command_db_check(
+        args,
+        load_settings_fn=lambda path: settings,
+        create_store_fn=cli.create_store,
+    )
+    captured = capsys.readouterr()
+
+    assert code == 0
+    payload = json.loads(captured.out)
+    assert payload['ok'] is True
+    assert payload['data']['schema_version'] == cli.SQLiteStore.SCHEMA_VERSION
+
+
+def test_healthcheck_json_outputs_error_envelope(capsys):
+    args = argparse.Namespace(config='config.yaml', state_file='state.json', lock_file='lock', smoke=False, headed=False, json=True)
+
+    code = cli_backend.command_healthcheck(
+        args,
+        load_settings_fn=lambda path: Settings(auth=AuthSettings(authorization='Bearer token')),
+        collect_healthcheck_errors_fn=lambda **kwargs: ['bad path'],
+    )
+    captured = capsys.readouterr()
+
+    assert code == 1
+    payload = json.loads(captured.err)
+    assert payload['ok'] is False
+    assert payload['error']['code'] == 'healthcheck_failed'
+    assert payload['error']['details']['errors'] == ['bad path']
 
 
 def test_history_command_delegates_to_handler(monkeypatch):

@@ -84,3 +84,15 @@ def test_command_history_passes_event_type_filter(monkeypatch, capsys):
     assert code == 0
     assert captured.out.strip() == 'No history.'
     assert store.calls == [{'account_name': None, 'task_type': None, 'event_type': 'scheduled.started', 'limit': 20}]
+
+
+def test_command_history_json_empty_outputs_empty_array(monkeypatch, capsys):
+    store = DummyStore([])
+    monkeypatch.setattr(cli, 'load_settings', lambda path: object())
+    monkeypatch.setattr(cli, 'create_store', lambda settings: store)
+
+    code = cli.main(['debug', 'history', '--config', 'config.yaml', '--json'])
+    captured = capsys.readouterr()
+
+    assert code == 0
+    assert json.loads(captured.out) == []

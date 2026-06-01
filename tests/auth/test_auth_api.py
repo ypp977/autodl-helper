@@ -1,6 +1,7 @@
 import json
 import os
 import time
+import logging
 
 import pytest
 
@@ -231,6 +232,43 @@ def test_autodl_client_open_machine_supports_explicit_payload():
     client = api.AutoDLClient(authorization='Bearer token', min_day=7, session=DummySession())
     assert client.open_machine('iid', payload='gpu') is True
     assert captured['json'] == {'instance_uuid': 'iid', 'payload': 'gpu'}
+
+
+def test_autodl_client_power_logs_redact_sensitive_response(caplog):
+    class DummySession:
+        def post(self, **kwargs):
+            return DummyResponse({'code': 'Success', 'data': {'token': 'secret-token', 'authorization': 'Bearer secret'}})
+
+    client = api.AutoDLClient(authorization='Bearer token', min_day=7, session=DummySession())
+
+    with caplog.at_level(logging.INFO):
+        assert client.open_machine('iid') is True
+
+    assert 'secret-token' not in caplog.text
+    assert 'Bearer secret' not in caplog.text
+    assert '<redacted>' in caplog.text
+
+
+def test_autodl_client_list_instances_error_redacts_sensitive_response():
+    class DummySession:
+        def post(self, **kwargs):
+            return DummyResponse({
+                'code': 'Failed',
+                'msg': 'token=secret-token Authorization=Bearer secret',
+                'data': {'authorization': 'Bearer nested-secret', 'cookie': 'session-secret'},
+            })
+
+    client = api.AutoDLClient(authorization='Bearer token', min_day=7, session=DummySession())
+
+    with pytest.raises(RuntimeError) as exc_info:
+        client.list_instances()
+
+    message = str(exc_info.value)
+    assert 'secret-token' not in message
+    assert 'Bearer secret' not in message
+    assert 'nested-secret' not in message
+    assert 'session-secret' not in message
+    assert '<redacted>' in message
 
 
 def test_build_browser_launch_kwargs_prefers_explicit_executable():

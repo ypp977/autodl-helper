@@ -51,6 +51,7 @@ from autodl_helper.state import StateStore
 from autodl_helper.core.store import SQLiteStore
 from autodl_helper.tasks.keeper import evaluate_keeper_instance, format_duration_seconds, run_keeper_cycle
 from autodl_helper.tasks.scheduled_start import ScheduledStartJobRuntime, run_scheduled_start_job
+from autodl_helper.cli.output import print_json, print_json_error, json_ok
 
 logger = logging.getLogger(__name__)
 TIME_RE = re.compile(r'^(?:[01]\d|2[0-3]):[0-5]\d$')
@@ -113,14 +114,17 @@ def command_history(
         if args.account:
             select_accounts_fn(settings, args.account)
     except ValueError as exc:
+        if getattr(args, 'json', False):
+            print_json_error('account_error', str(exc))
+            return 1
         print(str(exc), file=sys.stderr)
         return 1
     rows = store.read_history(account_name=args.account, task_type=args.task, event_type=args.event_type, limit=args.limit)
-    if not rows:
-        print('No history.')
-        return 0
     if args.json:
         print(json.dumps([history_row_to_json_fn(row) for row in rows], ensure_ascii=False, indent=2))
+        return 0
+    if not rows:
+        print('No history.')
         return 0
     print(format_history_table_fn(rows))
     return 0
@@ -146,6 +150,9 @@ def command_auth_report(
         if args.account:
             select_accounts_fn(settings, args.account)
     except ValueError as exc:
+        if getattr(args, 'json', False):
+            print_json_error('account_error', str(exc))
+            return 1
         print(str(exc), file=sys.stderr)
         return 1
     rows = store.summarize_auth_failures(account_name=args.account, limit=args.limit)
@@ -154,9 +161,11 @@ def command_auth_report(
     if args.only_likely_auth:
         rows = [row for row in rows if likely_auth_candidate_fn(row)]
     if args.apply_suggested_patch:
-        code_count, message_count, file_path = apply_auth_signal_patch_fn(rows)
-        print(f'Applied suggested patch to {file_path}: codes={code_count}, messages={message_count}')
-        return 0
+        if getattr(args, 'json', False):
+            print_json_error('unsafe_option_disabled', '--apply-suggested-patch 已禁用：请使用 --suggest-patch 查看建议后人工确认修改。')
+            return 2
+        print('--apply-suggested-patch 已禁用：请使用 --suggest-patch 查看建议后人工确认修改。', file=sys.stderr)
+        return 2
     if args.json:
         print(json.dumps({
             'known_code_signals': sorted(known_code_signals),
@@ -190,8 +199,14 @@ def command_db_check(
         store = create_store_fn(settings)
         version = store.schema_version()
     except Exception as exc:
+        if getattr(args, 'json', False):
+            print_json_error('db_check_failed', str(exc))
+            return 1
         print(f'DB check failed: {exc}', file=sys.stderr)
         return 1
+    if getattr(args, 'json', False):
+        print_json(json_ok({'path': settings.storage.database_file, 'schema_version': version}))
+        return 0
     print(f'DB OK. path={settings.storage.database_file} schema_version={version}')
     return 0
 

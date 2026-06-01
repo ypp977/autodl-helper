@@ -150,6 +150,28 @@ def test_auth_report_only_likely_auth_filters_noise(monkeypatch, capsys):
     assert payload['rows'][0]['code'] == 'Unauthorized'
 
 
+def test_auth_report_apply_suggested_patch_is_disabled(monkeypatch, capsys):
+    rows = [
+        AuthEventSummary(
+            code='SessionRevoked',
+            msg='session revoked',
+            count=2,
+            last_seen_at='2026-04-08T01:00:00+08:00',
+            accounts=['main'],
+            mapped=False,
+            matched_by='unmapped',
+        )
+    ]
+    monkeypatch.setattr(cli, 'load_settings', lambda path: object())
+    monkeypatch.setattr(cli, 'create_store', lambda settings: DummyAuthStore(rows))
+
+    code = cli.main(['debug', 'auth', '--config', 'config.yaml', '--apply-suggested-patch'])
+    captured = capsys.readouterr()
+
+    assert code == 2
+    assert '已禁用' in captured.err
+
+
 def test_apply_auth_signal_patch_updates_target_file(tmp_path, monkeypatch):
     target = tmp_path / 'auth_error_signals.py'
     target.write_text(

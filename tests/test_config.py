@@ -1,4 +1,5 @@
 from pathlib import Path
+import os
 
 from autodl_helper.core import config
 
@@ -32,6 +33,15 @@ def test_load_settings_reads_yaml_jobs(tmp_path, monkeypatch):
     assert settings.tasks.scheduled_start.jobs[0].instance_id == 'abc'
     assert settings.tasks.scheduled_start.poll_interval_seconds == 120
     assert settings.tasks.scheduled_start.jobs[0].schedule_mode == 'daily'
+
+
+def test_write_raw_settings_uses_restricted_permissions(tmp_path):
+    config_path = tmp_path / 'config.yaml'
+
+    config.write_raw_settings(config_path, {'auth': {'authorization': 'Bearer secret'}})
+
+    assert os.stat(config_path).st_mode & 0o777 == 0o600
+    assert 'Bearer secret' in config_path.read_text(encoding='utf-8')
 
 
 def test_load_settings_reads_job_schedule_mode(tmp_path, monkeypatch):

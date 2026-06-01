@@ -117,9 +117,11 @@ def build_parser() -> argparse.ArgumentParser:
     _add_common_runtime_args(health_parser)
     _add_path_args(health_parser)
     health_parser.add_argument('--smoke', action='store_true', help='Also perform auth and instance list smoke test')
+    health_parser.add_argument('--json', action='store_true', help='Output JSON status/error envelope')
 
     db_parser = debug_subparsers.add_parser('db', help='Check SQLite schema and writability')
     _add_common_runtime_args(db_parser)
+    db_parser.add_argument('--json', action='store_true', help='Output JSON status/error envelope')
 
     auth_parser = debug_subparsers.add_parser('auth', help='Summarize observed auth failure signals from SQLite event log')
     _add_common_runtime_args(auth_parser)
@@ -128,7 +130,7 @@ def build_parser() -> argparse.ArgumentParser:
     auth_parser.add_argument('--only-unmapped', action='store_true', help='Only show currently uncovered code/msg pairs')
     auth_parser.add_argument('--only-likely-auth', action='store_true', help='Only keep likely auth-related signals and filter obvious noise')
     auth_parser.add_argument('--suggest-patch', action='store_true', help='Generate suggested patch content for auth_error_signals.py')
-    auth_parser.add_argument('--apply-suggested-patch', action='store_true', help='Apply suggested patch to auth_error_signals.py automatically')
+    auth_parser.add_argument('--apply-suggested-patch', action='store_true', help='Deprecated unsafe option; use --suggest-patch and apply manually')
 
     history_parser = debug_subparsers.add_parser('history', help='Show recent keeper/scheduled-start history from SQLite')
     _add_common_runtime_args(history_parser)
@@ -144,10 +146,12 @@ def build_parser() -> argparse.ArgumentParser:
     config_show_parser = config_subparsers.add_parser('show', help='Show loaded configuration from file/env')
     _add_config_arg(config_show_parser)
     config_show_parser.add_argument('--account', help='Only show one configured account name')
+    config_show_parser.add_argument('--json', action='store_true', help='Output JSON and JSON errors')
 
     config_validate_parser = config_subparsers.add_parser('validate', help='Validate configuration only')
     _add_config_arg(config_validate_parser)
     config_validate_parser.add_argument('--account', help='Only resolve one configured account name')
+    config_validate_parser.add_argument('--json', action='store_true', help='Output JSON status/error envelope')
     _add_runtime_override_args(config_validate_parser)
 
     return parser
