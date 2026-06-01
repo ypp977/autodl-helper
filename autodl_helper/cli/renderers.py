@@ -8,7 +8,7 @@ from typing import Sequence
 from autodl_helper.core.auth import AUTH_CODE_SIGNALS, AUTH_MESSAGE_SIGNALS
 from autodl_helper.core.models import AuthEventSummary, HistoryRecord, KeeperResult
 from autodl_helper.tasks.keeper import compute_keeper_schedule, format_duration_seconds
-from autodl_helper.tasks.keeper_results import keeper_reason_label
+from autodl_helper.tasks.keeper_results import keeper_reason_label, keeper_result_label
 
 
 GPU_SPEC_RE = re.compile(r'(?P<model>.+?)\s*[*×x]\s*(?P<count>\d+)\s*(?:卡)?\s*$')
@@ -174,18 +174,18 @@ def release_source_label(value: str) -> str:
 
 
 def probe_result_label(value: str) -> str:
-    return {
-        'ready': '可执行',
+    probe_labels = {
         'keeper_executed': '已执行keeper',
-        'keeper_failed_power_on': '开机失败',
-        'keeper_failed_power_off': '关机失败',
-        'skip_not_due': '未到keeper窗口',
-        'skip_recently_stopped': '最近关机冷却中',
-        'skip_recently_started': '最近启动冷却中',
-        'skip_missing_shutdown_time': '缺少关机时间',
         'skip_already_executed_in_cycle': '本周期已执行',
         'skip_missing_instance_id': '缺少实例ID',
-    }.get(value, value)
+        'skip_missing_shutdown_time': '缺少关机时间',
+        'skip_not_due': '未到keeper窗口',
+        'skip_recently_started': '最近启动冷却中',
+        'skip_recently_stopped': '最近关机冷却中',
+    }
+    if value in probe_labels:
+        return probe_labels[value]
+    return keeper_result_label(value)
 
 
 def probe_reason_label(value: str) -> str:

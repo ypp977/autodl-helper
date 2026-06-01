@@ -50,7 +50,7 @@ from autodl_helper.services.manager import (
 from autodl_helper.state import StateStore
 from autodl_helper.core.store import SQLiteStore
 from autodl_helper.tasks.keeper import evaluate_keeper_instance, format_duration_seconds, run_keeper_cycle
-from autodl_helper.tasks.keeper_results import keeper_reason_label
+from autodl_helper.tasks.keeper_results import keeper_reason_label, keeper_result_label
 from autodl_helper.tasks.scheduled_start import ScheduledStartJobRuntime, run_scheduled_start_job
 
 logger = logging.getLogger(__name__)
@@ -288,20 +288,8 @@ def run_keeper_only(
                 account_name=account.name,
             )
             for result in account_results:
-                result_label = {
-                    'keeper_executed': '已执行保活',
-                    'skip_not_due': '跳过',
-                    'skip_running': '跳过',
-                    'keeper_failed_power_on': '失败',
-                    'keeper_failed_power_off': '失败',
-                }.get(result.result, result.result or '-')
-                reason_label = {
-                    'keeper_window_reached': '到达保活窗口',
-                    'before_next_keeper_time': '未到保活窗口',
-                    'instance_running': '实例正在运行',
-                    'power_on_failed': '开机失败',
-                    'power_off_failed': '关机失败',
-                }.get(result.reason, keeper_reason_label(result.reason))
+                result_label = '失败' if result.result in {'keeper_failed_power_on', 'keeper_failed_power_off'} else keeper_result_label(result.result)
+                reason_label = keeper_reason_label(result.reason)
                 extra = [
                     f'下次保活={_format_local_time_label(result.next_keeper_time)}',
                     f'释放时间={_format_local_time_label(result.release_deadline)}',

@@ -3,29 +3,13 @@ from __future__ import annotations
 import logging
 from datetime import datetime, timedelta
 
+from autodl_helper.tasks.scheduled_results import scheduled_reason_label, scheduled_result_label
+
 logger = logging.getLogger(__name__)
 
 
 def _scheduled_start_reason_label(reason: str) -> str:
-    if reason in {'window_already_succeeded'}:
-        return '当前窗口已完成'
-    if reason in {'outside_window'}:
-        return '未到执行窗口'
-    if reason in {'selector_no_match', 'instance_missing'}:
-        return '暂无可用目标'
-    if reason in {'gpu_idle_zero', 'no_eligible_candidate', 'running_without_gpu', 'retrying'}:
-        return '候选暂不可抢'
-    if reason in {'already_running', 'started'}:
-        return '实例已在运行'
-    if reason in {'power_on_submitted'}:
-        return '已提交开机'
-    if reason in {'deadline_failed', 'deadline_missed'}:
-        return '已过截止时间'
-    if reason in {'task_paused'}:
-        return '任务已暂停'
-    if reason in {'scheduled_disabled'}:
-        return '配置未启用'
-    return reason or '-'
+    return scheduled_reason_label(reason)
 
 
 def _format_scheduled_window(*, target_time: str, advance_hours: int, now: datetime) -> str:
@@ -89,21 +73,7 @@ def _log_scheduled_start_summary(
     instance_id: str = '',
     candidate_count: int | None = None,
 ) -> None:
-    status_label = {
-        'skip': '跳过',
-        'started': '已开机',
-        'success': '已开机',
-        'already_running': '已在运行',
-        'power_on_submitted': '已提交开机',
-        'started_without_gpu': '等待',
-        'retrying': '等待',
-        'waiting_for_instance': '等待',
-        'waiting_for_gpu': '等待',
-        'deadline_failed': '失败',
-        'instance_missing': '失败',
-        'failure': '失败',
-        'outside_window': '跳过',
-    }.get(status, status or '-')
+    status_label = scheduled_result_label(status if status != 'skip' else 'outside_window')
     fields = [
         f'账号={account_name}',
         f'任务={job_name}',

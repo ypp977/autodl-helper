@@ -475,7 +475,7 @@ def _edit_job(payload: dict[str, Any], input_fn: InputFn, *, clear_screen_enable
             before = copy.deepcopy(job)
             changed = handler(payload, index, choice, input_fn)
             changed_any = changed_any or (changed and scheduled_jobs(payload)[index] != before)
-            notice = '已更新，按 0 返回' if changed else '无效选择'
+            notice = '草稿已更新，保存后生效' if changed else '无效选择'
         except ValueError as exc:
             notice = f'操作失败: {exc}'
 
@@ -520,7 +520,7 @@ def scheduled_menu(payload: dict[str, Any], input_fn: InputFn, *, clear_screen_e
             if choice == '1':
                 add_scheduled_job(payload, _prompt_job(input_fn))
                 changed_any = True
-                notice = '已新增任务'
+                notice = '草稿已新增任务，保存后生效'
             elif choice == '2':
                 changed_any = _edit_job(payload, input_fn, clear_screen_enabled=clear_screen_enabled) or changed_any
             elif choice == '3':
@@ -532,7 +532,7 @@ def scheduled_menu(payload: dict[str, Any], input_fn: InputFn, *, clear_screen_e
                     if confirm == delete_label:
                         delete_scheduled_job(payload, index)
                         changed_any = True
-                        notice = '已删除任务'
+                        notice = '草稿已删除任务，保存后生效'
                     else:
                         notice = '已取消删除'
             elif choice == '4':
@@ -540,20 +540,20 @@ def scheduled_menu(payload: dict[str, Any], input_fn: InputFn, *, clear_screen_e
                 if index is not None:
                     enabled = toggle_scheduled_job(payload, index)
                     changed_any = True
-                    notice = f"任务已{'启用' if enabled else '停用'}"
+                    notice = f"草稿已{'启用' if enabled else '停用'}任务，保存后生效"
             elif choice == '5':
                 next_enabled = not bool(scheduled.get('enabled', True))
                 action = '启用' if next_enabled else '停用'
                 if parse_bool(_prompt(input_fn, f'确认{action}整个抢机功能? y/N', 'n')):
                     scheduled['enabled'] = next_enabled
                     changed_any = True
-                    notice = f'整个抢机功能已{action}'
+                    notice = f'草稿已{action}整个抢机功能，保存后生效'
                 else:
                     notice = '已取消'
             elif choice == '6':
                 scheduled['poll_interval_seconds'] = _prompt_int(input_fn, '轮询间隔秒数', int(scheduled.get('poll_interval_seconds') or 5), minimum=5)
                 changed_any = True
-                notice = '轮询间隔已更新'
+                notice = '草稿已更新轮询间隔，保存后生效'
             elif choice == '0':
                 if not changed_any:
                     payload.clear()

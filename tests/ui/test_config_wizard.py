@@ -141,7 +141,7 @@ def test_run_ui_can_open_config_management_menu_without_hanging(tmp_path, capsys
     config_path = tmp_path / 'config.yaml'
     db_path = tmp_path / 'data' / 'autodl-helper.db'
     write_raw_settings(config_path, _valid_payload(str(db_path)))
-    inputs = iter(['2', '0', '0'])
+    inputs = iter(['3', '2', '0', '0'])
 
     code = run_ui(SimpleNamespace(command='ui', config=str(config_path)), input_fn=lambda prompt='': next(inputs))
     captured = capsys.readouterr()
@@ -149,6 +149,25 @@ def test_run_ui_can_open_config_management_menu_without_hanging(tmp_path, capsys
     assert code == 0
     assert 'autodl-helper dashboard' in captured.out
     assert '配置管理' in captured.out
+    assert '抢机配置' in captured.out
+    assert 'Keeper 配置' in captured.out
+
+
+def test_config_wizard_labels_config_entries_explicitly(tmp_path, capsys):
+    config_path = tmp_path / 'config.yaml'
+    db_path = tmp_path / 'data' / 'autodl-helper.db'
+    write_raw_settings(config_path, _valid_payload(str(db_path)))
+
+    from autodl_helper.ui.config_wizard import run_config_wizard
+
+    saved = run_config_wizard(config_path, input_fn=lambda prompt='': '0')
+    captured = capsys.readouterr()
+
+    assert saved is False
+    assert '抢机配置' in captured.out
+    assert 'Keeper 配置' in captured.out
+    assert '抢机任务' not in captured.out
+    assert 'Keeper 参数' not in captured.out
 
 
 def test_config_wizard_edits_single_scheduled_job_field(tmp_path):
@@ -259,6 +278,97 @@ def test_config_wizard_keeper_menu_saves_on_exit_without_extra_confirm(tmp_path,
     assert updated['tasks']['keeper']['keeper_trigger_before_hours'] == 18
     assert '保存并返回' not in captured.out
     assert '草稿已更新，保存后生效' in captured.out
+    assert '配置已保存并已请求重载' in captured.out
+
+
+def test_config_wizard_save_success_does_not_call_saved_config_a_draft(tmp_path, capsys):
+    config_path = tmp_path / 'config.yaml'
+    db_path = tmp_path / 'data' / 'autodl-helper.db'
+    payload = _valid_payload(str(db_path))
+    payload['tasks']['scheduled_start']['enabled'] = False
+    write_raw_settings(config_path, payload)
+
+    from autodl_helper.ui.config_wizard import run_config_wizard
+
+    inputs = iter([
+        '2',  # Keeper 参数
+        '1',  # 核心参数
+        '1',  # 到期前触发保活
+        '18',
+        '0',
+        '0',
+        '0',
+    ])
+
+    saved = run_config_wizard(config_path, input_fn=lambda prompt='': next(inputs))
+    captured = capsys.readouterr()
+
+    assert saved is True
+    assert '配置已保存并已请求重载' in captured.out
+    assert '草稿已更新，保存后生效' not in captured.out.split('配置已保存并已请求重载')[-1]
+
+
+def test_scheduled_job_edit_notice_says_draft_until_save(tmp_path, capsys):
+    config_path = tmp_path / 'config.yaml'
+    db_path = tmp_path / 'data' / 'autodl-helper.db'
+    payload = _valid_payload(str(db_path))
+    payload['tasks']['scheduled_start']['jobs'] = [
+        {
+            'enabled': True,
+            'name': 'fixed-job',
+            'instance_id': 'iid-1',
+            'target_time': '13:00',
+            'advance_hours': 2,
+            'timezone': 'Asia/Shanghai',
+        }
+    ]
+    write_raw_settings(config_path, payload)
+
+    from autodl_helper.ui.config_wizard import run_config_wizard
+
+    inputs = iter([
+        '1',  # 抢机任务
+        '2',  # 编辑任务
+        '1',  # 任务编号
+        '3',  # 目标时间
+        '1430',
+        '0',
+        '0',
+        '0',
+    ])
+
+    saved = run_config_wizard(config_path, input_fn=lambda prompt='': next(inputs))
+    captured = capsys.readouterr()
+
+    assert saved is True
+    assert '草稿已更新，保存后生效' in captured.out
+    assert '已更新，按 0 返回' not in captured.out
+
+
+def test_scheduled_top_level_notice_says_draft_until_save(tmp_path, capsys):
+    config_path = tmp_path / 'config.yaml'
+    db_path = tmp_path / 'data' / 'autodl-helper.db'
+    payload = _valid_payload(str(db_path))
+    payload['tasks']['scheduled_start']['enabled'] = False
+    payload['tasks']['scheduled_start']['poll_interval_seconds'] = 5
+    write_raw_settings(config_path, payload)
+
+    from autodl_helper.ui.config_wizard import run_config_wizard
+
+    inputs = iter([
+        '1',  # 抢机任务
+        '6',  # 修改轮询
+        '10',
+        '0',
+        '0',
+    ])
+
+    saved = run_config_wizard(config_path, input_fn=lambda prompt='': next(inputs))
+    captured = capsys.readouterr()
+
+    assert saved is True
+    assert '草稿已更新轮询间隔，保存后生效' in captured.out
+    assert '轮询间隔已更新' not in captured.out
 
 
 def test_config_wizard_enter_submenu_without_changes_does_not_mark_dirty(tmp_path, capsys):

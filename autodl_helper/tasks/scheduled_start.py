@@ -10,6 +10,7 @@ from autodl_helper.core.config import ScheduledStartPriority, ScheduledStartSele
 from autodl_helper.events import enrich_scheduled_result
 from autodl_helper.core.models import ScheduledStartCandidateDetail, ScheduledStartResult
 from autodl_helper.state import StateStore
+from autodl_helper.tasks.scheduled_results import scheduled_candidate_reason_label
 
 logger = logging.getLogger(__name__)
 _GPU_COUNT_RE = re.compile(r'[*×x]\s*(\d+)\s*卡', re.IGNORECASE)
@@ -263,14 +264,7 @@ def _format_notification_message(result: ScheduledStartResult) -> str:
 
 
 def _candidate_reason_label(reason: str) -> str:
-    return {
-        'running_with_gpu': '实例已在 GPU 模式运行',
-        'eligible': '可尝试开机',
-        'gpu_idle_zero': 'GPU 空闲数为 0',
-        'missing_gpu_idle_num': '缺少 gpu_idle_num',
-        'running_without_gpu': '实例已运行但不是 GPU 模式',
-        'not_shutdown': '实例当前不处于关机状态',
-    }.get(reason, reason or '-')
+    return scheduled_candidate_reason_label(reason)
 
 
 def _candidate_reason(instance: dict) -> str:

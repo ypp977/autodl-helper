@@ -325,8 +325,8 @@ def run_config_wizard(config_path: str | Path, *, input_fn: InputFn = input, pri
         print_fn(f'配置文件: {color(str(path), YELLOW)}')
         print_fn('')
         print_numbered_menu([
-            ('1', '抢机任务'),
-            ('2', 'Keeper 参数'),
+            ('1', '抢机配置'),
+            ('2', 'Keeper 配置'),
             ('3', '校验配置'),
             ('0', '返回'),
         ])
@@ -352,7 +352,7 @@ def run_config_wizard(config_path: str | Path, *, input_fn: InputFn = input, pri
                     backup_path = path.with_suffix(path.suffix + '.bak')
                     if backup_path.exists():
                         print_fn(f'备份: {backup_path}')
-                    print_fn('草稿已更新，保存后生效')
+                    print_fn('配置已保存并已请求重载')
                     return True
                 return False
             else:

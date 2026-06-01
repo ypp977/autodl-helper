@@ -1,6 +1,20 @@
 from __future__ import annotations
 
 
+_RESULT_LABELS = {
+    'keeper_executed': '已执行保活',
+    'keeper_failed_power_off': '关机失败',
+    'keeper_failed_power_on': '开机失败',
+    'ready': '可执行',
+    'skip_already_executed_in_cycle': '跳过',
+    'skip_missing_instance_id': '跳过',
+    'skip_missing_shutdown_time': '跳过',
+    'skip_not_due': '跳过',
+    'skip_recently_started': '跳过',
+    'skip_recently_stopped': '跳过',
+    'skip_running': '跳过',
+}
+
 _REASON_LABELS = {
     'already_executed_in_release_cycle': '该释放周期已执行过保活',
     'auth_failed': '授权失效或接口拒绝登录态',
@@ -40,6 +54,10 @@ _REASON_CATEGORIES = {
     'power_on_timeout': 'timeout',
     'quota_limited': 'quota',
 }
+
+
+def keeper_result_label(result: str) -> str:
+    return _RESULT_LABELS.get(str(result or ''), str(result or '-') or '-')
 
 
 def keeper_reason_label(reason: str) -> str:
