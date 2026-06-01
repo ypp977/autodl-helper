@@ -7,7 +7,7 @@ Check whether the daemon is actually writing new scheduled history.
 Commands:
 
 ```bash
-python main.py service status --config config.yaml
+autodl-helper service status --config config.yaml
 tail -n 20 logs/service.stdout.log
 ```
 
@@ -20,7 +20,7 @@ What to verify:
 If needed:
 
 ```bash
-python main.py service restart --config config.yaml
+autodl-helper service restart --config config.yaml
 ```
 
 ## 2. Interactive page only updates after pressing Enter
@@ -34,20 +34,20 @@ This usually means one of these:
 First:
 
 ```bash
-python main.py ui --config config.yaml
+autodl-helper ui --config config.yaml
 ```
 
 Then confirm:
 
-- the footer shows auto-refresh text where expected
 - background logs continue moving
+- dashboard Keeper data comes from local SQLite history; run Keeper once when you need a fresh AutoDL probe
 
 ## 3. Background service shows abnormal status
 
 Check:
 
 ```bash
-python main.py service status --config config.yaml
+autodl-helper service status --config config.yaml
 tail -n 50 logs/service.stderr.log
 tail -n 50 logs/service.stdout.log
 ```
@@ -67,7 +67,7 @@ Platform-specific checks:
 Try:
 
 ```bash
-python main.py service restart --config config.yaml
+autodl-helper service restart --config config.yaml
 ```
 
 ## 4. Keeper plan looks wrong
@@ -75,8 +75,8 @@ python main.py service restart --config config.yaml
 Run:
 
 ```bash
-python main.py keeper-probe --config config.yaml
-python main.py history --config config.yaml --task keeper --limit 20
+autodl-helper run keeper --config config.yaml --run-once
+autodl-helper debug history --config config.yaml --task keeper --limit 20
 ```
 
 Check:
@@ -93,7 +93,7 @@ The project now groups keeper history by execution batch.
 If old history was created before batch grouping existed, summary behavior may differ slightly for legacy rows. Check the raw history:
 
 ```bash
-python main.py history --config config.yaml --task keeper --limit 50
+autodl-helper debug history --config config.yaml --task keeper --limit 50
 ```
 
 ## 6. Config changes do not take effect
@@ -101,9 +101,9 @@ python main.py history --config config.yaml --task keeper --limit 50
 Run:
 
 ```bash
-python main.py config validate --config config.yaml
-python main.py config show --config config.yaml
-python main.py service restart --config config.yaml
+autodl-helper config validate --config config.yaml
+autodl-helper config show --config config.yaml
+autodl-helper service restart --config config.yaml
 ```
 
 If config reload fails, the daemon keeps using the last valid config.
@@ -113,8 +113,8 @@ If config reload fails, the daemon keeps using the last valid config.
 Check:
 
 ```bash
-python main.py login --config config.yaml --account main
-python main.py debug auth --config config.yaml
+autodl-helper login --config config.yaml --account main
+autodl-helper debug auth --config config.yaml
 ```
 
 Verify:
@@ -134,14 +134,14 @@ Symptoms:
 Check:
 
 ```bash
-python main.py debug db --config config.yaml
+autodl-helper debug db --config config.yaml
 ls -la data logs .cache
 ```
 
 If needed, stop the daemon before manual cleanup:
 
 ```bash
-python main.py service stop --config config.yaml
+autodl-helper service stop --config config.yaml
 ```
 
 Then back up and inspect local files before deleting anything.

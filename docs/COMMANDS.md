@@ -24,22 +24,22 @@ autodl-helper run keeper --config config.yaml
 autodl-helper run scheduled --config config.yaml
 autodl-helper ui --config config.yaml
 autodl-helper service status --config config.yaml
-autodl-helper debug health --config config.yaml
+autodl-helper debug health --config config.yaml --json
 autodl-helper debug history --config config.yaml --limit 50
 autodl-helper config show --config config.yaml
-autodl-helper config validate --config config.yaml
+autodl-helper config validate --config config.yaml --json
 ```
 
 ## Runtime options
 
+Common options:
+
 - `--config`
-- `--headed`
 - `--account`
-- `--state-file`
-- `--lock-file`
-- keeper overrides such as `--shutdown-release-after-hours`, `--keeper-trigger-before-hours`
-- scheduled overrides such as `--scheduled-job`, `--target-time`, `--advance-hours`, `--schedule-mode`, `--weekdays`
-- auth overrides such as `--lightweight-mode`, `--runtime-auth-revalidate-seconds`
+- `--headed`
+- `--state-file` / `--lock-file`
+
+Task-specific overrides stay on their owning command, for example Keeper timing options on `run keeper` and scheduled-start timing options on `run scheduled`.
 
 ## Service
 
@@ -58,8 +58,10 @@ Backend is selected by platform: macOS LaunchAgent, Linux systemd user service, 
 
 ```bash
 autodl-helper debug health --config config.yaml
+autodl-helper debug health --config config.yaml --json
 autodl-helper debug health --config config.yaml --smoke
 autodl-helper debug db --config config.yaml
+autodl-helper debug db --config config.yaml --json
 autodl-helper debug auth --config config.yaml
 autodl-helper debug auth --config config.yaml --json
 autodl-helper debug auth --config config.yaml --only-unmapped
@@ -71,9 +73,42 @@ autodl-helper debug history --config config.yaml --task keeper
 
 ```bash
 autodl-helper config show --config config.yaml
+autodl-helper config show --config config.yaml --json
 autodl-helper config validate --config config.yaml
-autodl-helper config validate --config config.example.yaml
+autodl-helper config validate --config config.yaml --json
 ```
+
+Interactive config editing is available from `autodl-helper ui --config config.yaml`.
+
+## Terminal UI layout
+
+`autodl-helper ui` 的主菜单按职责分层：
+
+- `1` 刷新状态。
+- `2` 业务操作：Keeper 管理、抢机管理。
+- `3` 设置管理：账户管理、配置管理。
+- `4` daemon 管理。
+- `0` 退出。
+
+业务操作页只写运行时控制状态，不直接改 `config.yaml`；完整配置仍从“配置管理”进入。
+
+## JSON output contract
+
+Commands that expose `--json` keep their successful data output stable. Status-style commands such as
+`config validate --json`, `debug db --json`, and `debug health --json` return:
+
+```json
+{"ok": true, "data": {"status": "valid"}}
+```
+
+When a `--json` command fails, stderr uses a stable envelope and redacts sensitive fields:
+
+```json
+{"ok": false, "error": {"code": "config_invalid", "message": "Configuration invalid.", "details": {"errors": []}}}
+```
+
+`debug auth --apply-suggested-patch` is disabled because runtime event data must not directly edit source files.
+Use `debug auth --suggest-patch` and apply reviewed changes manually.
 
 ## Old aliases
 

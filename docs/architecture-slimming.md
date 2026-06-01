@@ -30,6 +30,13 @@ The CLI should be an adapter: parse arguments, delegate to lower-level applicati
 Business logic should move into core/task/service modules where it can be tested independently and reused by CLI and UI.
 Structure tests express this by keeping compatibility façades thin and by preventing CLI boundary modules from growing new helper/class definitions.
 
+## UI slimming rule
+
+Terminal UI modules should keep user interaction local to UI adapters while consuming reusable task/runtime helpers for business labels and state.
+`autodl_helper/ui/action_menus.py` is a compatibility façade; ownership-specific menu behavior belongs in `daemon_menu.py`, `keeper_menu.py`, and `account_menu.py`.
+
+Passive dashboard rendering must read local state/history only. Live AutoDL API calls should remain explicit actions such as Keeper execution, scheduled-start execution, list, login, or account health checks.
+
 ## Removed legacy rule
 
 Old guardrails that referenced the legacy interactive shim module were removed. New rules target the current package boundaries (`ui`, `cli.app`) instead of legacy shim names.

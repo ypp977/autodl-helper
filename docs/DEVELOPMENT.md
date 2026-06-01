@@ -98,12 +98,15 @@ python -m playwright install chromium
 
 ## Current structure notes
 
-当前仓库已适合继续开源演进，但仍有两个现实点：
+当前仓库已适合继续开源演进，但仍有几个现实点：
 
-1. `autodl_helper/ui/app.py` 体积偏大  
-   后续适合按页面或功能拆分渲染逻辑。
+1. UI action code is split by ownership
+   daemon、Keeper、账号菜单分别在 `autodl_helper/ui/*_menu.py`，`action_menus.py` 只保留兼容导出。
 
-2. 目前 lint 策略是保守接入  
+2. Task result labels should live with task modules
+   Keeper 和 scheduled-start 的结果/原因标签在 `autodl_helper/tasks/*_results.py`，CLI/UI 只做展示组合。
+
+3. 目前 lint 策略是保守接入
    等代码结构更稳定后，再逐步扩大规则范围，例如未使用导入、导入排序、风格一致性等。
 
-3. 服务托管相关说明应以 `docs/SERVICE.md` 为准，开发时不要再把后台服务理解成单一 macOS 专属实现。
+4. 服务托管相关说明应以 `docs/SERVICE.md` 为准，开发时不要再把后台服务理解成单一 macOS 专属实现。

@@ -39,36 +39,39 @@ python -m autodl_helper --help
 
 ## Install
 
-推荐 `pipx` 或项目虚拟环境，避免 Homebrew Python 的 `externally-managed-environment` 限制。
+推荐二选一：
 
 ```bash
 pipx install .
 pipx inject autodl-helper playwright==1.58.0 --include-apps
 playwright install chromium
-autodl-helper init
-autodl-helper ui --config config.yaml
 ```
-
-从源码运行时：
 
 ```bash
 python3 -m venv .venv
 ./.venv/bin/python -m pip install -r requirements.txt
 ./.venv/bin/playwright install chromium
-./.venv/bin/python main.py init
-./.venv/bin/python main.py ui --config config.yaml
 ```
 
-Windows 把 `./.venv/bin/python` 换成 `.\.venv\Scripts\python`。Nuitka 可执行文件构建见 `docs/DEVELOPMENT.md`。
+首次运行：
+
+```bash
+autodl-helper init
+autodl-helper ui --config config.yaml
+```
+
+从源码运行时把 `autodl-helper` 换成 `./.venv/bin/python main.py`。Windows 把 `./.venv/bin/python` 换成 `.\.venv\Scripts\python`。
 
 ## Common commands
 
 ```bash
 autodl-helper ui --config config.yaml
-autodl-helper run daemon --config config.yaml
 autodl-helper run keeper --config config.yaml
+autodl-helper run scheduled --config config.yaml
+autodl-helper run daemon --config config.yaml
 autodl-helper service status --config config.yaml
 autodl-helper debug health --config config.yaml
+autodl-helper debug history --config config.yaml --task keeper
 autodl-helper config validate --config config.yaml
 ```
 
