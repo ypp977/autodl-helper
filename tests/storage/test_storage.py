@@ -1,4 +1,5 @@
 import sqlite3
+import os
 
 from autodl_helper.core.config import AccountSettings
 from autodl_helper.core.store import SQLiteStore
@@ -15,6 +16,16 @@ def test_sqlite_store_initializes_schema_and_registers_accounts(tmp_path):
     assert store.schema_version() == SQLiteStore.SCHEMA_VERSION
     rows = store.read_history(limit=5)
     assert rows == []
+
+
+def test_sqlite_store_creates_database_with_restricted_permissions(tmp_path):
+    db_path = tmp_path / 'private-data' / 'data.db'
+    store = SQLiteStore(db_path)
+
+    store.init_schema()
+
+    assert os.stat(db_path).st_mode & 0o777 == 0o600
+    assert os.stat(db_path.parent).st_mode & 0o777 == 0o700
 
 
 def test_keeper_cycle_dedupe_uses_account_instance_and_release_deadline(tmp_path):
@@ -65,6 +76,32 @@ def test_read_history_can_filter_event_type(tmp_path):
     assert rows[0].instance_id == 'iid-2'
 
 
+def test_read_history_filters_before_limit_for_sparse_account(tmp_path):
+    store = SQLiteStore(tmp_path / 'state.db')
+    store.init_schema()
+    store.add_scheduled_history('backup', 'job-backup', 'iid-backup', '2026-04-08', 'started', 'started', {'s': 'backup'})
+    for index in range(60):
+        store.add_scheduled_history('main', f'job-main-{index}', f'iid-main-{index}', '2026-04-08', 'waiting_for_gpu', 'gpu_idle_zero', {'s': index})
+
+    rows = store.read_history(account_name='backup', limit=1)
+
+    assert len(rows) == 1
+    assert rows[0].account_name == 'backup'
+    assert rows[0].task_type == 'scheduled_start'
+
+
+def test_set_runtime_values_writes_multiple_keys(tmp_path):
+    store = SQLiteStore(tmp_path / 'state.db')
+    store.init_schema()
+
+    store.set_runtime_values({'daemon_state': 'running', 'daemon_mode': 'all', 'daemon_pid': '123'})
+
+    snapshot = store.get_runtime_snapshot()
+    assert snapshot['daemon_state'] == 'running'
+    assert snapshot['daemon_mode'] == 'all'
+    assert snapshot['daemon_pid'] == '123'
+
+
 def test_summarize_auth_failures_marks_unmapped_rows(tmp_path):
     store = SQLiteStore(tmp_path / 'data.db')
     store.init_schema()
@@ -76,6 +113,31 @@ def test_summarize_auth_failures_marks_unmapped_rows(tmp_path):
     assert rows[0].count >= rows[1].count
     assert any(row.code == 'WeirdCode' and row.mapped is False for row in rows)
     assert any(row.code == 'Unauthorized' and row.mapped is True for row in rows)
+
+
+def test_record_auth_event_redacts_sensitive_payload(tmp_path):
+    from autodl_helper.cli.shared_accounts import record_auth_event
+
+    store = SQLiteStore(tmp_path / 'data.db')
+    store.init_schema()
+
+    record_auth_event(
+        store,
+        'main',
+        {
+            'code': 'Unauthorized',
+            'msg': 'token=secret-token authorization=Bearer secret',
+            'token': 'secret-token',
+            'nested': {'password': 'secret-password'},
+        },
+    )
+
+    with store.connect() as conn:
+        row = conn.execute('SELECT msg, payload FROM event_log WHERE task_type = ?', ('auth',)).fetchone()
+    payload = __import__('json').loads(row['payload'])
+    assert row['msg'] == 'token=<redacted> authorization=<redacted>'
+    assert payload['token'] == '<redacted>'
+    assert payload['nested']['password'] == '<redacted>'
 
 
 def test_sqlite_store_connect_retries_transient_open_failure(tmp_path, monkeypatch):

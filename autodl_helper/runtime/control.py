@@ -8,6 +8,7 @@ from typing import Any
 
 from ..config import ScheduledStartJob
 from ..storage import SQLiteStore, utc_now_iso
+from .pid import pid_exists
 
 
 DAEMON_STATUS_TTL_SECONDS = 90
@@ -32,17 +33,7 @@ def _ensure_aware_utc(value: datetime) -> datetime:
 
 
 def _pid_exists(pid: int | None) -> bool:
-    if pid is None or pid <= 0:
-        return False
-    try:
-        os.kill(int(pid), 0)
-    except ProcessLookupError:
-        return False
-    except PermissionError:
-        return True
-    except Exception:
-        return False
-    return True
+    return pid_exists(pid)
 
 
 def _parse_iso_datetime(raw: str) -> datetime | None:
@@ -134,21 +125,25 @@ def mark_daemon_heartbeat(
     origin: str | None = None,
 ) -> None:
     pid = pid if pid is not None else os.getpid()
-    store.set_runtime_value('daemon_state', 'running')
-    store.set_runtime_value('daemon_mode', mode)
-    store.set_runtime_value('daemon_pid', str(pid))
-    store.set_runtime_value('daemon_account', str(account or ''))
-    store.set_runtime_value('daemon_origin', str(origin or ''))
-    store.set_runtime_value('daemon_last_seen_at', utc_now_iso())
+    store.set_runtime_values({
+        'daemon_state': 'running',
+        'daemon_mode': mode,
+        'daemon_pid': str(pid),
+        'daemon_account': str(account or ''),
+        'daemon_origin': str(origin or ''),
+        'daemon_last_seen_at': utc_now_iso(),
+    })
 
 
 def clear_daemon_heartbeat(store: SQLiteStore) -> None:
-    store.set_runtime_value('daemon_state', 'stopped')
-    store.set_runtime_value('daemon_mode', '')
-    store.set_runtime_value('daemon_pid', '')
-    store.set_runtime_value('daemon_account', '')
-    store.set_runtime_value('daemon_origin', '')
-    store.set_runtime_value('daemon_last_seen_at', utc_now_iso())
+    store.set_runtime_values({
+        'daemon_state': 'stopped',
+        'daemon_mode': '',
+        'daemon_pid': '',
+        'daemon_account': '',
+        'daemon_origin': '',
+        'daemon_last_seen_at': utc_now_iso(),
+    })
 
 
 def read_daemon_status(store: SQLiteStore) -> dict[str, Any]:
@@ -223,22 +218,26 @@ def claim_daemon_launch(
     if status['launch_state'] == 'starting':
         return {**status, 'claimed': False}
     now_iso = utc_now_iso()
-    store.set_runtime_value('daemon_launch_state', 'starting')
-    store.set_runtime_value('daemon_launch_account', str(account or ''))
-    store.set_runtime_value('daemon_launch_pid', '')
-    store.set_runtime_value('daemon_launch_started_at', now_iso)
+    store.set_runtime_values({
+        'daemon_launch_state': 'starting',
+        'daemon_launch_account': str(account or ''),
+        'daemon_launch_pid': '',
+        'daemon_launch_started_at': now_iso,
+    })
     status = read_daemon_launch_status(store, starting_ttl_seconds=starting_ttl_seconds)
     return {**status, 'claimed': True}
 
 
 def mark_daemon_launch_running(store: SQLiteStore, *, account: str | None, pid: int | None) -> None:
-    store.set_runtime_value('daemon_launch_state', 'running')
-    store.set_runtime_value('daemon_launch_account', str(account or ''))
-    store.set_runtime_value('daemon_launch_pid', str(pid or ''))
-    store.set_runtime_value('daemon_launch_started_at', utc_now_iso())
-    store.set_runtime_value('daemon_launch_last_error', '')
-    store.set_runtime_value('daemon_launch_error_count', '0')
-    store.set_runtime_value('daemon_launch_fused_until', '')
+    store.set_runtime_values({
+        'daemon_launch_state': 'running',
+        'daemon_launch_account': str(account or ''),
+        'daemon_launch_pid': str(pid or ''),
+        'daemon_launch_started_at': utc_now_iso(),
+        'daemon_launch_last_error': '',
+        'daemon_launch_error_count': '0',
+        'daemon_launch_fused_until': '',
+    })
 
 
 def mark_daemon_launch_failure(
@@ -256,29 +255,35 @@ def mark_daemon_launch_failure(
     if error_count >= max(1, fuse_after_failures):
         state = 'fused'
         fused_until = (datetime.now(timezone.utc) + timedelta(seconds=max(1, cooldown_seconds))).isoformat()
-    store.set_runtime_value('daemon_launch_state', state)
-    store.set_runtime_value('daemon_launch_account', str(account or ''))
-    store.set_runtime_value('daemon_launch_pid', '')
-    store.set_runtime_value('daemon_launch_started_at', utc_now_iso())
-    store.set_runtime_value('daemon_launch_last_error', str(error or ''))
-    store.set_runtime_value('daemon_launch_error_count', str(error_count))
-    store.set_runtime_value('daemon_launch_fused_until', fused_until)
+    store.set_runtime_values({
+        'daemon_launch_state': state,
+        'daemon_launch_account': str(account or ''),
+        'daemon_launch_pid': '',
+        'daemon_launch_started_at': utc_now_iso(),
+        'daemon_launch_last_error': str(error or ''),
+        'daemon_launch_error_count': str(error_count),
+        'daemon_launch_fused_until': fused_until,
+    })
     return read_daemon_launch_status(store)
 
 
 def clear_daemon_launch_state(store: SQLiteStore) -> None:
-    store.set_runtime_value('daemon_launch_state', 'idle')
-    store.set_runtime_value('daemon_launch_account', '')
-    store.set_runtime_value('daemon_launch_pid', '')
-    store.set_runtime_value('daemon_launch_started_at', '')
-    store.set_runtime_value('daemon_launch_fused_until', '')
+    store.set_runtime_values({
+        'daemon_launch_state': 'idle',
+        'daemon_launch_account': '',
+        'daemon_launch_pid': '',
+        'daemon_launch_started_at': '',
+        'daemon_launch_fused_until': '',
+    })
 
 
 def request_config_reload(store: SQLiteStore) -> dict[str, Any]:
     now = utc_now_iso()
     generation = int(store.get_runtime_value('config_generation', '0') or '0') + 1
-    store.set_runtime_value('reload_requested_at', now)
-    store.set_runtime_value('config_generation', str(generation))
+    store.set_runtime_values({
+        'reload_requested_at': now,
+        'config_generation': str(generation),
+    })
     return read_config_reload_status(store)
 
 
@@ -308,13 +313,15 @@ def mark_config_reload_success(
     generation_value = current['requested_generation'] if generation is None else max(0, int(generation))
     loaded_value = str(loaded_at or utc_now_iso())
     mtime_value = _format_mtime_value(config_mtime)
-    store.set_runtime_value('config_last_processed_generation', str(generation_value))
-    store.set_runtime_value('config_last_applied_generation', str(generation_value))
-    store.set_runtime_value('config_last_loaded_at', loaded_value)
-    store.set_runtime_value('config_last_loaded_mtime', mtime_value)
-    store.set_runtime_value('config_last_processed_mtime', mtime_value)
-    store.set_runtime_value('config_last_reload_status', 'success')
-    store.set_runtime_value('config_last_reload_error', '')
+    store.set_runtime_values({
+        'config_last_processed_generation': str(generation_value),
+        'config_last_applied_generation': str(generation_value),
+        'config_last_loaded_at': loaded_value,
+        'config_last_loaded_mtime': mtime_value,
+        'config_last_processed_mtime': mtime_value,
+        'config_last_reload_status': 'success',
+        'config_last_reload_error': '',
+    })
     return read_config_reload_status(store)
 
 
@@ -327,10 +334,12 @@ def mark_config_reload_failure(
 ) -> dict[str, Any]:
     current = read_config_reload_status(store)
     generation_value = current['requested_generation'] if generation is None else max(0, int(generation))
-    store.set_runtime_value('config_last_processed_generation', str(generation_value))
-    store.set_runtime_value('config_last_processed_mtime', _format_mtime_value(config_mtime))
-    store.set_runtime_value('config_last_reload_status', 'failed')
-    store.set_runtime_value('config_last_reload_error', str(error or ''))
+    store.set_runtime_values({
+        'config_last_processed_generation': str(generation_value),
+        'config_last_processed_mtime': _format_mtime_value(config_mtime),
+        'config_last_reload_status': 'failed',
+        'config_last_reload_error': str(error or ''),
+    })
     return read_config_reload_status(store)
 
 

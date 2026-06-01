@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import sqlite3
 import time
+import os
 from pathlib import Path
 from typing import Any
 
@@ -41,12 +42,24 @@ class SQLiteStore(ControlStoreMixin):
         self._schema_initialized = False
 
     def connect(self) -> sqlite3.Connection:
-        self.path.parent.mkdir(parents=True, exist_ok=True)
+        if str(self.path) != ':memory:':
+            parent_exists = self.path.parent.exists()
+            self.path.parent.mkdir(parents=True, exist_ok=True)
+            if not parent_exists:
+                try:
+                    os.chmod(self.path.parent, 0o700)
+                except OSError:
+                    pass
         last_error: sqlite3.OperationalError | None = None
         for attempt in range(self.CONNECT_RETRY_ATTEMPTS):
             try:
                 conn = sqlite3.connect(self.path, factory=_ClosingSQLiteConnection)
                 conn.row_factory = sqlite3.Row
+                if str(self.path) != ':memory:':
+                    try:
+                        os.chmod(self.path, 0o600)
+                    except OSError:
+                        pass
                 return conn
             except sqlite3.OperationalError as exc:
                 last_error = exc
@@ -223,59 +236,75 @@ class SQLiteStore(ControlStoreMixin):
         self.init_schema()
         with self.connect() as conn:
             records: list[HistoryRecord] = []
+            row_limit = max(limit * 4, 50)
 
             if task_type in {None, 'keeper'}:
-                keeper_rows = conn.execute(
-                    """
+                clauses: list[str] = []
+                params: list[Any] = []
+                if account_name:
+                    clauses.append('account_name = ?')
+                    params.append(account_name)
+                if event_type:
+                    clauses.append('event_type = ?')
+                    params.append(event_type)
+                keeper_query = """
                     SELECT created_at, account_name, result, reason, instance_id, event_type, severity, summary, payload
                     FROM keeper_history
-                    ORDER BY created_at DESC
-                    LIMIT ?
-                    """,
-                    (max(limit * 4, 50),),
-                ).fetchall()
+                """
+                if clauses:
+                    keeper_query += ' WHERE ' + ' AND '.join(clauses)
+                keeper_query += ' ORDER BY created_at DESC LIMIT ?'
+                params.append(row_limit)
+                keeper_rows = conn.execute(keeper_query, params).fetchall()
                 for row in keeper_rows:
-                    if account_name and row['account_name'] != account_name:
-                        continue
-                    if event_type and (row['event_type'] or '') != event_type:
-                        continue
                     records.append(keeper_history_record(row))
 
             if task_type in {None, 'scheduled_start'}:
-                scheduled_rows = conn.execute(
-                    """
+                clauses = []
+                params = []
+                if account_name:
+                    clauses.append('account_name = ?')
+                    params.append(account_name)
+                if event_type:
+                    clauses.append('event_type = ?')
+                    params.append(event_type)
+                scheduled_query = """
                     SELECT created_at, account_name, result, reason, instance_id, event_type, severity, summary, payload
                     FROM scheduled_history
-                    ORDER BY created_at DESC
-                    LIMIT ?
-                    """,
-                    (max(limit * 4, 50),),
-                ).fetchall()
+                """
+                if clauses:
+                    scheduled_query += ' WHERE ' + ' AND '.join(clauses)
+                scheduled_query += ' ORDER BY created_at DESC LIMIT ?'
+                params.append(row_limit)
+                scheduled_rows = conn.execute(scheduled_query, params).fetchall()
                 for row in scheduled_rows:
-                    if account_name and row['account_name'] != account_name:
-                        continue
-                    if event_type and (row['event_type'] or '') != event_type:
-                        continue
                     records.append(scheduled_history_record(row))
 
             if task_type in {None, 'service'}:
+                clauses = ["task_type = 'service'"]
+                params = []
+                if account_name:
+                    clauses.append("(account_name = ? OR account_name = '')")
+                    params.append(account_name)
+                if event_type:
+                    clauses.append('(code = ? OR payload LIKE ? OR payload LIKE ?)')
+                    params.extend([event_type, f'%"action": "{event_type}"%', f'%"action":"{event_type}"%'])
                 service_rows = conn.execute(
-                    """
+                    f"""
                     SELECT created_at, account_name, level, message, code, msg, payload
                     FROM event_log
-                    WHERE task_type = 'service'
+                    WHERE {' AND '.join(clauses)}
                     ORDER BY created_at DESC
                     LIMIT ?
                     """,
-                    (max(limit * 4, 50),),
+                    [*params, row_limit],
                 ).fetchall()
                 for row in service_rows:
-                    payload = load_payload(row['payload'])
-                    payload_event_type = str(payload.get('action') or '')
-                    if account_name and row['account_name'] not in {'', account_name}:
-                        continue
-                    if event_type and payload_event_type != event_type and str(row['code'] or '') != event_type:
-                        continue
+                    if event_type:
+                        payload = load_payload(row['payload'])
+                        payload_event_type = str(payload.get('action') or '')
+                        if payload_event_type != event_type and str(row['code'] or '') != event_type:
+                            continue
                     records.append(service_history_record(row))
 
             records.sort(key=lambda item: item.created_at, reverse=True)

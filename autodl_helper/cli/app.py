@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import logging
 import os
-import signal
 import subprocess
 import sys
 import tempfile
@@ -103,10 +102,17 @@ from autodl_helper.runtime_control import (
     read_daemon_status,
     request_config_reload,
 )
+from autodl_helper.runtime.pid import terminate_pid
 from autodl_helper.core.store import SQLiteStore
 from autodl_helper.tasks.keeper import evaluate_keeper_instance, run_keeper_cycle
 from autodl_helper.tasks.scheduled_start import run_scheduled_start_job
 from autodl_helper.tracemalloc_profiler import profiler_from_env
+
+
+def _detached_popen_kwargs() -> dict[str, object]:
+    if os.name == 'nt':
+        return {'creationflags': getattr(subprocess, 'CREATE_NEW_PROCESS_GROUP', 0x00000200)}
+    return {'start_new_session': True}
 
 logger = logging.getLogger(__name__)
 
@@ -235,9 +241,9 @@ def start_background_scheduled_polling(args) -> tuple[int, str]:
             stdin=subprocess.DEVNULL,
             stdout=subprocess.DEVNULL,
             stderr=stderr_handle,
-            start_new_session=True,
             cwd=str(Path(config_path).resolve().parent),
             env=env,
+            **_detached_popen_kwargs(),
         )
     except Exception as exc:
         stderr_handle.close()
@@ -284,7 +290,7 @@ def stop_background_polling(settings: Settings, store: SQLiteStore) -> tuple[int
         clear_daemon_launch_state(store)
         return 1, '未找到后台轮询进程'
     try:
-        os.kill(pid, signal.SIGTERM)
+        terminate_pid(pid)
     except ProcessLookupError:
         clear_daemon_heartbeat(store)
         clear_daemon_launch_state(store)

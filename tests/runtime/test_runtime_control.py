@@ -151,6 +151,32 @@ def test_daemon_launch_claim_respects_starting_state(tmp_path):
     assert reused['launch_state'] == 'starting'
 
 
+def test_daemon_launch_claim_writes_launch_snapshot_in_one_batch():
+    class RuntimeOnlyStore:
+        def __init__(self):
+            self.snapshot: dict[str, str] = {}
+            self.batch_writes: list[dict[str, str]] = []
+
+        def get_runtime_snapshot(self):
+            return dict(self.snapshot)
+
+        def set_runtime_values(self, values):
+            self.batch_writes.append(dict(values))
+            self.snapshot.update({str(key): str(value) for key, value in values.items()})
+
+        def set_runtime_value(self, key, value):
+            raise AssertionError('claim_daemon_launch should use set_runtime_values')
+
+    store = RuntimeOnlyStore()
+
+    claimed = claim_daemon_launch(store, account='main', starting_ttl_seconds=10)  # type: ignore[arg-type]
+
+    assert claimed['claimed'] is True
+    assert len(store.batch_writes) == 1
+    assert store.snapshot['daemon_launch_state'] == 'starting'
+    assert store.snapshot['daemon_launch_account'] == 'main'
+
+
 def test_daemon_launch_running_status_reuses_existing_pid(tmp_path):
     store = SQLiteStore(tmp_path / 'data.db')
     store.init_schema()

@@ -3,21 +3,15 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
+from .pid import pid_exists
+
 
 class LockAcquisitionError(RuntimeError):
     pass
 
 
 def _pid_is_running(pid: int) -> bool:
-    if pid <= 0:
-        return False
-    try:
-        os.kill(pid, 0)
-    except ProcessLookupError:
-        return False
-    except PermissionError:
-        return True
-    return True
+    return pid_exists(pid)
 
 
 class FileLock:

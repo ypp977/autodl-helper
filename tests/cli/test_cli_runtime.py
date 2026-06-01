@@ -6,6 +6,7 @@ import autodl_helper.cli.app as cli
 import autodl_helper.cli.commands.runtime as runtime_commands
 import autodl_helper.cli.commands.service as service_commands
 import autodl_helper.cli.commands as cli_backend
+from autodl_helper.runtime_control import mark_task_run
 from autodl_helper.core.config import EmailSettings, KeeperSettings, NotificationChannelSettings, NotificationSettings, ScheduledStartJob, ScheduledStartSettings, Settings, TaskSettings
 
 
@@ -70,6 +71,45 @@ def test_compute_cycle_interval_uses_keeper_when_scheduled_disabled():
 
 build_notifiers = cli.build_notifiers
 compute_cycle_interval_seconds = cli.compute_cycle_interval_seconds
+compute_dispatch_interval_seconds = cli.compute_dispatch_interval_seconds
+
+
+def test_compute_dispatch_interval_uses_sixty_seconds_for_keeper_only_idle_loop():
+    settings = Settings(
+        tasks=TaskSettings(
+            keeper=KeeperSettings(enabled=True, interval_minutes=15),
+            scheduled_start=ScheduledStartSettings(enabled=False),
+        )
+    )
+    assert compute_dispatch_interval_seconds(settings) == 60
+
+
+def test_compute_dispatch_interval_keeps_fast_scheduled_polling_when_configured():
+    settings = Settings(
+        tasks=TaskSettings(
+            keeper=KeeperSettings(enabled=True, interval_minutes=60),
+            scheduled_start=ScheduledStartSettings(
+                enabled=True,
+                poll_interval_seconds=5,
+                jobs=[ScheduledStartJob(instance_id='iid')],
+            ),
+        )
+    )
+    assert compute_dispatch_interval_seconds(settings) == 5
+
+
+def test_compute_dispatch_interval_caps_slow_scheduled_polling_at_one_minute():
+    settings = Settings(
+        tasks=TaskSettings(
+            keeper=KeeperSettings(enabled=True, interval_minutes=60),
+            scheduled_start=ScheduledStartSettings(
+                enabled=True,
+                poll_interval_seconds=300,
+                jobs=[ScheduledStartJob(instance_id='iid')],
+            ),
+        )
+    )
+    assert compute_dispatch_interval_seconds(settings) == 60
 
 
 def test_run_cycle_executes_all_scheduled_jobs(monkeypatch, tmp_path):
@@ -281,6 +321,39 @@ def test_run_scheduled_start_cycle_disables_once_job_after_success(monkeypatch, 
     assert control['enabled'] is False
 
 
+def test_run_scheduled_start_cycle_skips_disabled_task_before_building_client(tmp_path):
+    calls = []
+    store = cli.SQLiteStore(tmp_path / 'data.db')
+    store.init_schema()
+
+    def fail_build_client(**kwargs):
+        calls.append(kwargs)
+        raise AssertionError('disabled scheduled-start must not build client')
+
+    settings = Settings(
+        tasks=TaskSettings(
+            scheduled_start=ScheduledStartSettings(
+                enabled=False,
+                poll_interval_seconds=5,
+                jobs=[ScheduledStartJob(instance_id='iid-1', name='job-1')],
+            ),
+        ),
+        accounts=[cli.AccountSettings(name='main', enabled=True, authorization='Bearer token')],
+    )
+
+    results = runtime_commands.run_scheduled_start_cycle(
+        settings=settings,
+        headed=False,
+        state_file=tmp_path / 'state.json',
+        account_name='main',
+        store=store,
+        build_client_fn=fail_build_client,
+    )
+
+    assert results == []
+    assert calls == []
+
+
 def test_run_scheduled_start_cycle_passes_force_run_now(monkeypatch, tmp_path):
     store = cli.SQLiteStore(tmp_path / 'data.db')
     store.init_schema()
@@ -438,6 +511,59 @@ def test_run_keeper_only_emits_window_fields(monkeypatch, tmp_path, caplog):
     assert '下次保活=04-23 04:00:00' in joined
     assert '释放时间=04-24 00:00:00' in joined
     assert '接管窗口=04-23 04:00:00 ~ 04-24 00:00:00' in joined
+
+
+def test_run_keeper_only_skips_disabled_task_before_building_client(tmp_path):
+    calls = []
+    store = cli.SQLiteStore(tmp_path / 'data.db')
+    store.init_schema()
+
+    def fail_build_client(**kwargs):
+        calls.append(kwargs)
+        raise AssertionError('disabled keeper must not build client')
+
+    settings = Settings(
+        tasks=TaskSettings(keeper=KeeperSettings(enabled=False)),
+        accounts=[cli.AccountSettings(name='main', enabled=True, authorization='Bearer token')],
+    )
+
+    results = runtime_commands.run_keeper_only(
+        settings=settings,
+        headed=False,
+        account_name='main',
+        store=store,
+        build_client_fn=fail_build_client,
+    )
+
+    assert results == []
+    assert calls == []
+
+
+def test_run_keeper_only_skips_paused_task_before_building_client(tmp_path):
+    calls = []
+    store = cli.SQLiteStore(tmp_path / 'data.db')
+    store.init_schema()
+    store.set_task_control('main', 'keeper', enabled=False, source='test')
+
+    def fail_build_client(**kwargs):
+        calls.append(kwargs)
+        raise AssertionError('paused keeper must not build client')
+
+    settings = Settings(
+        tasks=TaskSettings(keeper=KeeperSettings(enabled=True)),
+        accounts=[cli.AccountSettings(name='main', enabled=True, authorization='Bearer token')],
+    )
+
+    results = runtime_commands.run_keeper_only(
+        settings=settings,
+        headed=False,
+        account_name='main',
+        store=store,
+        build_client_fn=fail_build_client,
+    )
+
+    assert results == []
+    assert calls == []
 
 
 
@@ -610,6 +736,42 @@ def test_daemon_dispatch_emits_chinese_summary(monkeypatch, tmp_path, caplog):
     assert '抢机间隔阈值=5秒' in joined
 
 
+def test_daemon_dispatch_skips_tasks_before_interval_due(tmp_path):
+    store = cli.SQLiteStore(tmp_path / 'data.db')
+    store.init_schema()
+    now = datetime(2026, 5, 25, 12, 0, tzinfo=timezone.utc)
+    mark_task_run(store, 'keeper', now=now)
+    mark_task_run(store, 'scheduled_start', now=now)
+    settings = Settings(
+        tasks=TaskSettings(
+            keeper=KeeperSettings(enabled=True, interval_minutes=60),
+            scheduled_start=ScheduledStartSettings(
+                enabled=True,
+                poll_interval_seconds=300,
+                jobs=[ScheduledStartJob(instance_id='iid-1', name='job-1')],
+            ),
+        ),
+        accounts=[cli.AccountSettings(name='main', enabled=True, authorization='Bearer token')],
+    )
+    args = SimpleNamespace(config='config.yaml', headed=False, state_file=tmp_path / 'state.json', account='main')
+    keeper_calls = []
+    scheduled_calls = []
+
+    results = cli_backend.daemon_dispatch(
+        args=args,
+        load_settings_fn=lambda path: settings,
+        create_store_fn=lambda settings: store,
+        run_keeper_only_fn=lambda **kwargs: keeper_calls.append(kwargs) or [],
+        run_scheduled_start_cycle_fn=lambda **kwargs: scheduled_calls.append(kwargs) or [],
+        state={'settings': settings},
+        now_fn=lambda: now,
+    )
+
+    assert results == []
+    assert keeper_calls == []
+    assert scheduled_calls == []
+
+
 def test_scheduled_daemon_should_exit_when_account_has_no_enabled_jobs(tmp_path):
     store = cli.SQLiteStore(tmp_path / 'data.db')
     store.init_schema()
@@ -639,6 +801,67 @@ def test_read_daemon_status_includes_account_and_origin(tmp_path):
     assert status['pid'] == 4321
     assert status['account'] == 'main'
     assert status['origin'] == 'interactive-auto'
+
+
+def test_daemon_run_marks_heartbeat_before_initial_dispatch(tmp_path):
+    config_path = tmp_path / 'config.yaml'
+    config_path.write_text('storage:\n  database_file: data.db\n', encoding='utf-8')
+    store = cli.SQLiteStore(tmp_path / 'data.db')
+    store.init_schema()
+    settings = Settings(
+        tasks=TaskSettings(
+            keeper=KeeperSettings(enabled=True, interval_minutes=60),
+            scheduled_start=ScheduledStartSettings(enabled=False),
+        ),
+        accounts=[cli.AccountSettings(name='main', enabled=True, authorization='Bearer token')],
+    )
+    seen = {}
+
+    class FakeLock:
+        def __init__(self, path):
+            self.path = path
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+    class FakeScheduler:
+        def add_job(self, *args, **kwargs):
+            return None
+
+        def start(self):
+            raise KeyboardInterrupt
+
+    def fake_dispatch(**kwargs):
+        status = cli.read_daemon_status(store)
+        seen['running_before_dispatch'] = status['running']
+        seen['mode_before_dispatch'] = status['mode']
+        return []
+
+    args = SimpleNamespace(
+        config=str(config_path),
+        lock_file=str(tmp_path / 'autodl.lock'),
+        headed=False,
+        account=None,
+        state_file=str(tmp_path / 'state.json'),
+        run_once=False,
+    )
+
+    code = cli_backend.command_run_variant(
+        args,
+        'all',
+        load_settings_fn=lambda path: settings,
+        validate_settings_fn=lambda settings, purpose='run_daemon': [],
+        file_lock_cls=FakeLock,
+        scheduler_cls=FakeScheduler,
+        create_store_fn=lambda settings: store,
+        daemon_dispatch_fn=fake_dispatch,
+    )
+
+    assert code == 0
+    assert seen == {'running_before_dispatch': True, 'mode_before_dispatch': 'all'}
 
 
 def test_maybe_reload_daemon_settings_consumes_reload_request(tmp_path):

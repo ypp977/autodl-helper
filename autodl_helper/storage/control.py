@@ -30,6 +30,23 @@ class ControlStoreMixin:
                 (key, value, utc_now_iso()),
             )
 
+    def set_runtime_values(self, values: dict[str, str]) -> None:
+        if not values:
+            return
+        self.init_schema()
+        now = utc_now_iso()
+        with self.connect() as conn:
+            conn.executemany(
+                """
+                INSERT INTO runtime_control(key, value, updated_at)
+                VALUES (?, ?, ?)
+                ON CONFLICT(key) DO UPDATE SET
+                    value = excluded.value,
+                    updated_at = excluded.updated_at
+                """,
+                [(str(key), str(value), now) for key, value in values.items()],
+            )
+
     def get_runtime_value(self, key: str, default: str = '') -> str:
         self.init_schema()
         with self.connect() as conn:

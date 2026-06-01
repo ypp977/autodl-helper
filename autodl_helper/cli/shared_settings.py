@@ -22,7 +22,7 @@ def compute_cycle_interval_seconds(settings: Settings) -> int:
 
 
 def compute_dispatch_interval_seconds(settings: Settings) -> int:
-    return 5
+    return min(compute_cycle_interval_seconds(settings), 60)
 
 
 def compute_interval_for_mode(settings: Settings, mode: str) -> int:

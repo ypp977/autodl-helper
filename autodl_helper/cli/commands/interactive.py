@@ -142,6 +142,8 @@ def command_run_variant(
                 generation=read_config_reload_status(store)['requested_generation'],
                 config_mtime=_config_mtime_value(args.config),
             )
+            if not args.run_once:
+                mark_daemon_heartbeat(store, mode=heartbeat_mode, account=heartbeat_account, origin=heartbeat_origin)
             if mode == 'all':
                 daemon_dispatch_fn(
                     args=args,
@@ -164,7 +166,6 @@ def command_run_variant(
                     clear_daemon_heartbeat(store)
                     return 0
             scheduler = scheduler_cls()
-            mark_daemon_heartbeat(store, mode=heartbeat_mode, account=heartbeat_account, origin=heartbeat_origin)
             scheduler.add_job(
                 mark_daemon_heartbeat,
                 'interval',
