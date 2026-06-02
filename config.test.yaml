@@ -1,7 +1,10 @@
-auth:
-  authorization: ""
-  autodl_phone: ""
-  autodl_password: ""
+accounts:
+  - name: "test"
+    enabled: true
+    authorization: "Bearer test-token"
+    autodl_phone: ""
+    autodl_password: ""
+    cache_file: ".cache/test-auth.json"
 interactive:
   max_workers: 6
 notifications:
