@@ -5,6 +5,7 @@ import json
 import queue
 import sys
 import threading
+import time
 from collections import Counter
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
@@ -913,6 +914,28 @@ def _start_service_status_task(args: Any) -> _ServiceStatusTask:
     return _ServiceStatusTask(args)
 
 
+class _InputTask:
+    def __init__(self, input_fn: Any, prompt: str):
+        self._queue: queue.Queue[tuple[str, Any]] = queue.Queue(maxsize=1)
+        self._thread = threading.Thread(target=self._run, args=(input_fn, prompt), name='ui-main-menu-input', daemon=True)
+        self._thread.start()
+
+    def _run(self, input_fn: Any, prompt: str) -> None:
+        try:
+            self._queue.put(('ok', input_fn(prompt)))
+        except Exception as exc:
+            self._queue.put(('error', exc))
+
+    def done(self) -> bool:
+        return not self._queue.empty()
+
+    def result(self) -> str:
+        status, payload = self._queue.get_nowait()
+        if status == 'error':
+            raise payload
+        return str(payload)
+
+
 def _consume_service_status_task(
     task: Any | None,
     current_snapshot: dict[str, Any] | None,
@@ -957,6 +980,58 @@ def _consume_refresh_task(
     return None, rows, checked_at, current_service_snapshot, message
 
 
+def _read_main_choice_with_background_repaint(
+    args: Any,
+    *,
+    input_fn: Any,
+    refresh_task: Any | None,
+    service_task: Any | None,
+    keeper_live_rows: list[dict[str, Any]] | None,
+    keeper_live_checked_at: datetime | None,
+    service_snapshot: dict[str, Any] | None,
+) -> tuple[str, Any | None, Any | None, list[dict[str, Any]] | None, datetime | None, dict[str, Any] | None, str]:
+    if (refresh_task is None or refresh_task.done()) and (service_task is None or service_task.done()):
+        return input_fn('选择编号: ').strip().lower(), refresh_task, service_task, keeper_live_rows, keeper_live_checked_at, service_snapshot, ''
+
+    input_task = _InputTask(input_fn, '选择编号: ')
+    notice = ''
+    while not input_task.done():
+        changed = False
+        refresh_task, keeper_live_rows, keeper_live_checked_at, service_snapshot, refresh_notice = _consume_refresh_task(
+            refresh_task,
+            keeper_live_rows,
+            keeper_live_checked_at,
+            service_snapshot,
+        )
+        if refresh_notice and refresh_notice != '刷新中，完成后将更新状态栏':
+            notice = refresh_notice
+            changed = True
+        service_task, service_snapshot, service_notice = _consume_service_status_task(
+            service_task,
+            service_snapshot,
+        )
+        if service_notice:
+            notice = service_notice if not notice else notice
+            changed = True
+        if changed:
+            _print_dashboard(
+                args,
+                clear=True,
+                keeper_live_rows=keeper_live_rows,
+                keeper_live_checked_at=keeper_live_checked_at,
+                refresh_status='刷新中' if refresh_task is not None and not refresh_task.done() else None,
+                service_snapshot=service_snapshot,
+                service_pending=service_snapshot is None or (service_task is not None and not service_task.done()),
+            )
+            if notice:
+                print(f'\n{render_notice(notice, color_enabled=True)}')
+            _print_main_menu()
+            print('选择编号: ', end='', flush=True)
+        time.sleep(0.05)
+
+    return input_task.result().strip().lower(), refresh_task, service_task, keeper_live_rows, keeper_live_checked_at, service_snapshot, notice
+
+
 def run_ui(args: Any, *, input_fn=builtins.input) -> int:
     interactive = input_fn is not builtins.input or sys.stdin.isatty()
     if not interactive:
@@ -998,7 +1073,25 @@ def run_ui(args: Any, *, input_fn=builtins.input) -> int:
         if notice:
             print(f'\n{render_notice(notice, color_enabled=True)}')
         _print_main_menu()
-        choice = input_fn('选择编号: ').strip().lower()
+        (
+            choice,
+            refresh_task,
+            service_task,
+            keeper_live_rows,
+            keeper_live_checked_at,
+            service_snapshot,
+            input_notice,
+        ) = _read_main_choice_with_background_repaint(
+            args,
+            input_fn=input_fn,
+            refresh_task=refresh_task,
+            service_task=service_task,
+            keeper_live_rows=keeper_live_rows,
+            keeper_live_checked_at=keeper_live_checked_at,
+            service_snapshot=service_snapshot,
+        )
+        if input_notice:
+            notice = input_notice
         if choice == '0':
             return 0
         if choice in {'', '1'}:

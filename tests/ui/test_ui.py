@@ -605,6 +605,85 @@ def test_run_ui_refresh_submits_background_task_without_blocking_input(tmp_path,
     assert '面板' in captured.out
 
 
+def test_run_ui_refresh_repaints_when_background_task_finishes_while_waiting_for_input(tmp_path, capsys, monkeypatch):
+    db_path = tmp_path / 'data' / 'autodl-helper.db'
+    config_path = tmp_path / 'config.yaml'
+    config_path.write_text(
+        '\n'.join([
+            'accounts:',
+            '  - name: main',
+            '    enabled: true',
+            '    authorization: Bearer token',
+            'storage:',
+            f'  database_file: {db_path}',
+            'tasks:',
+            '  keeper:',
+            '    enabled: true',
+            '    keeper_trigger_before_hours: 72',
+            '    shutdown_release_after_hours: 360',
+        ]),
+        encoding='utf-8',
+    )
+
+    class FixedDateTime(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return cls(2026, 5, 8, 13, 0, tzinfo=tz)
+
+    class DelayedTask:
+        def __init__(self):
+            self.started = time.monotonic()
+
+        def done(self):
+            return time.monotonic() - self.started >= 0.05
+
+        def result(self):
+            return ui_app.DashboardSnapshot(
+                keeper_live_rows=[
+                    {
+                        'instance_id': 'iid-fresh',
+                        'release_deadline': FixedDateTime(2026, 5, 9, 0, 0).isoformat(),
+                    }
+                ],
+                keeper_live_checked_at=FixedDateTime.now(),
+                service_snapshot={'status_label': '运行中', 'running': True},
+                message='已刷新最新状态: Keeper 1 台 | 服务 运行中',
+            )
+
+    fresh_rendered = {'value': False}
+    real_print_dashboard = ui_app._print_dashboard
+
+    def spy_print_dashboard(*args, **kwargs):
+        rows = kwargs.get('keeper_live_rows') or []
+        if any(row.get('instance_id') == 'iid-fresh' for row in rows):
+            fresh_rendered['value'] = True
+        return real_print_dashboard(*args, **kwargs)
+
+    monkeypatch.setattr('autodl_helper.ui.app.datetime', FixedDateTime)
+    monkeypatch.setattr('autodl_helper.ui.app.service_status', lambda config_path: {'status_label': '未安装', 'running': False})
+    monkeypatch.setattr('autodl_helper.ui.app._start_refresh_task', lambda args: DelayedTask())
+    monkeypatch.setattr('autodl_helper.ui.app._print_dashboard', spy_print_dashboard)
+
+    prompts = {'count': 0}
+
+    def input_fn(prompt=''):
+        prompts['count'] += 1
+        if prompts['count'] == 1:
+            return '1'
+        deadline = time.monotonic() + 0.3
+        while time.monotonic() < deadline and not fresh_rendered['value']:
+            time.sleep(0.01)
+        return '0'
+
+    code = run_ui(SimpleNamespace(command='ui', config=str(config_path)), input_fn=input_fn)
+    captured = capsys.readouterr()
+
+    assert code == 0
+    assert fresh_rendered['value'] is True
+    assert '已刷新最新状态: Keeper 1 台 | 服务 运行中' in strip_ansi(captured.out)
+    assert 'iid-fresh' in strip_ansi(captured.out)
+
+
 def test_dashboard_does_not_build_client_for_password_only_account(tmp_path, capsys, monkeypatch):
     db_path = tmp_path / 'data' / 'autodl-helper.db'
     config_path = tmp_path / 'config.yaml'
