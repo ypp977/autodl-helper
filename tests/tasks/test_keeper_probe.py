@@ -1,4 +1,4 @@
-from scripts.keeper_probe import format_probe_line
+from autodl_helper.cli.renderers import format_keeper_probe_line as format_probe_line
 from autodl_helper.tasks.keeper import KeeperResult
 
 
