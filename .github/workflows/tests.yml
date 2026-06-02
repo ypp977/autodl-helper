@@ -140,12 +140,12 @@ jobs:
       - name: Run terminal UI compact dashboard test
         run: |
           set +e
-          pytest -vv tests/ui/test_ui.py \
+          pytest -q --tb=short tests/ui/test_ui.py \
             -k "compact_keeper" > /tmp/ui-compact.log 2>&1
           status=$?
           set -e
           if [ "$status" -ne 0 ]; then
-            message=$(python -c "from pathlib import Path; text = Path('/tmp/ui-compact.log').read_text(encoding='utf-8', errors='replace'); print(text.replace('%', '%25').replace(chr(13), '%0D').replace(chr(10), '%0A')[:7000])")
+            message=$(python -c "from pathlib import Path; text = Path('/tmp/ui-compact.log').read_text(encoding='utf-8', errors='replace')[-7000:]; print(text.replace('%', '%25').replace(chr(13), '%0D').replace(chr(10), '%0A'))")
             echo "::error title=Compact dashboard test failed::$message"
             exit "$status"
           fi
