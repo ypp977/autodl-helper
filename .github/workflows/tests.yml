@@ -132,10 +132,15 @@ jobs:
         run: |
           pytest -q tests/ui/test_config_wizard.py
 
-      - name: Run terminal UI render tests
+      - name: Run terminal UI primitive render tests
         run: |
           pytest -q tests/ui/test_ui.py \
-            -k "render or metric_rows or account_status_table or compact_keeper or first_screen or stale_heartbeat or launchd_config_error or keeper_dashboard or initial_render or refresh_fetches"
+            -k "render_dashboard_header or console_primitives or metric_rows or account_status_table or compact_keeper or stale_heartbeat or launchd_config_error or keeper_dashboard or refresh_fetches"
+
+      - name: Run terminal UI initial nonblocking tests
+        run: |
+          pytest -q tests/ui/test_ui.py \
+            -k "first_screen or initial_render"
 
       - name: Run terminal UI refresh tests
         run: |
