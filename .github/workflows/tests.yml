@@ -176,10 +176,15 @@ jobs:
           pytest -q tests/ui/test_ui.py \
             -k "keeper_menu or keeper_details or daemon_and_keeper or account_management or add_account or numeric_account or select_account or toggle_edit or config_save or account_menu or health_check"
 
-      - name: Run terminal UI scheduled tests
+      - name: Run terminal UI scheduled dashboard tests
         run: |
           pytest -q tests/ui/test_ui.py \
-            -k "scheduled"
+            -k "scheduled_management_is_read_only or scheduled_counts or scheduled_dashboard_batches"
+
+      - name: Run terminal UI scheduled control tests
+        run: |
+          pytest -q tests/ui/test_ui.py \
+            -k "pause_and_resume_single_scheduled or pause_and_resume_all_scheduled or config_disabled_scheduled or no_jobs or disabled_scheduler"
 
       - name: Run terminal UI keeper resume tests
         run: |
