@@ -139,8 +139,17 @@ jobs:
 
       - name: Run terminal UI compact dashboard test
         run: |
-          pytest -q tests/ui/test_ui.py \
-            -k "compact_keeper"
+          set +e
+          pytest -vv tests/ui/test_ui.py \
+            -k "compact_keeper" > /tmp/ui-compact.log 2>&1
+          status=$?
+          set -e
+          if [ "$status" -ne 0 ]; then
+            message=$(python -c "from pathlib import Path; text = Path('/tmp/ui-compact.log').read_text(encoding='utf-8', errors='replace'); print(text.replace('%', '%25').replace(chr(13), '%0D').replace(chr(10), '%0A')[:7000])")
+            echo "::error title=Compact dashboard test failed::$message"
+            exit "$status"
+          fi
+          cat /tmp/ui-compact.log
 
       - name: Run terminal UI service status tests
         run: |
