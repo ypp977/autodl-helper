@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import re
 import time
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 
 from autodl_helper.core.config import load_settings
@@ -19,6 +19,20 @@ ANSI_RE = re.compile(r'\x1b\[[0-9;]*m')
 
 def strip_ansi(text: str) -> str:
     return ANSI_RE.sub('', text)
+
+
+SHANGHAI_TZ = timezone(timedelta(hours=8))
+
+
+def fixed_shanghai_datetime(year: int, month: int, day: int, hour: int, minute: int):
+    fixed = datetime(year, month, day, hour, minute, tzinfo=SHANGHAI_TZ)
+
+    class FixedDateTime(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return fixed.astimezone(tz) if tz is not None else fixed
+
+    return FixedDateTime
 
 
 def test_render_dashboard_header():
@@ -144,13 +158,7 @@ def test_run_ui_prints_compact_keeper_and_scheduled_dashboard(tmp_path, capsys, 
         {'release_deadline': '2026-05-09T00:00:00+08:00', 'next_keeper_time': '2026-05-08T16:00:00+08:00'},
     )
 
-    class FixedDateTime(datetime):
-        @classmethod
-        def now(cls, tz=None):
-            base = cls(2026, 5, 8, 13, 0, tzinfo=tz)
-            return base
-
-    monkeypatch.setattr('autodl_helper.ui.app.datetime', FixedDateTime)
+    monkeypatch.setattr('autodl_helper.ui.app.datetime', fixed_shanghai_datetime(2026, 5, 8, 13, 0))
     monkeypatch.setattr(
         'autodl_helper.ui.app.service_status',
         lambda config_path: {'status_label': '未安装', 'running': False, 'detail': 'state=spawn scheduled'},
@@ -320,12 +328,7 @@ def test_keeper_dashboard_uses_history_without_live_probe(tmp_path, capsys, monk
         {'instance_id': 'iid-live', 'release_deadline': '2026-05-09T00:00:00+08:00', 'next_keeper_time': '2026-05-08T16:00:00+08:00'},
     )
 
-    class FixedDateTime(datetime):
-        @classmethod
-        def now(cls, tz=None):
-            return cls(2026, 5, 8, 13, 0, tzinfo=tz)
-
-    monkeypatch.setattr('autodl_helper.ui.app.datetime', FixedDateTime)
+    monkeypatch.setattr('autodl_helper.ui.app.datetime', fixed_shanghai_datetime(2026, 5, 8, 13, 0))
     calls = []
 
     def fail_build_client(*args, **kwargs):
@@ -408,11 +411,6 @@ def test_run_ui_refresh_fetches_latest_keeper_dashboard_state(tmp_path, capsys, 
         {'instance_id': 'iid-stale', 'release_deadline': '2026-05-09T00:00:00+08:00', 'next_keeper_time': '2026-05-08T16:00:00+08:00'},
     )
 
-    class FixedDateTime(datetime):
-        @classmethod
-        def now(cls, tz=None):
-            return cls(2026, 5, 8, 13, 0, tzinfo=tz)
-
     class DummyClient:
         def list_instances(self):
             return [
@@ -424,7 +422,7 @@ def test_run_ui_refresh_fetches_latest_keeper_dashboard_state(tmp_path, capsys, 
                     }
                 ]
 
-    monkeypatch.setattr('autodl_helper.ui.app.datetime', FixedDateTime)
+    monkeypatch.setattr('autodl_helper.ui.app.datetime', fixed_shanghai_datetime(2026, 5, 8, 13, 0))
     monkeypatch.setattr('autodl_helper.ui.app.service_status', lambda config_path: {'status_label': '未安装', 'running': False})
     monkeypatch.setattr('autodl_helper.ui.app.build_client', lambda settings, headed, account=None, store=None: DummyClient())
 
@@ -475,11 +473,6 @@ def test_run_ui_refresh_updates_keeper_and_service_from_same_snapshot(tmp_path, 
         encoding='utf-8',
     )
 
-    class FixedDateTime(datetime):
-        @classmethod
-        def now(cls, tz=None):
-            return cls(2026, 5, 8, 13, 0, tzinfo=tz)
-
     class DummyClient:
         def list_instances(self):
             return [
@@ -504,7 +497,7 @@ def test_run_ui_refresh_updates_keeper_and_service_from_same_snapshot(tmp_path, 
         def result(self):
             return self.value
 
-    monkeypatch.setattr('autodl_helper.ui.app.datetime', FixedDateTime)
+    monkeypatch.setattr('autodl_helper.ui.app.datetime', fixed_shanghai_datetime(2026, 5, 8, 13, 0))
     monkeypatch.setattr('autodl_helper.ui.app.build_client', lambda settings, headed, account=None, store=None: DummyClient())
     monkeypatch.setattr('autodl_helper.ui.app.service_status', lambda config_path: {'status_label': '运行中', 'running': True})
     monkeypatch.setattr('autodl_helper.ui.app._start_service_status_task', lambda args: NeverDoneTask())
@@ -621,11 +614,7 @@ def test_run_ui_refresh_repaints_when_background_task_finishes_while_waiting_for
         ]),
         encoding='utf-8',
     )
-
-    class FixedDateTime(datetime):
-        @classmethod
-        def now(cls, tz=None):
-            return cls(2026, 5, 8, 13, 0, tzinfo=tz)
+    fixed_datetime = fixed_shanghai_datetime(2026, 5, 8, 13, 0)
 
     class DelayedTask:
         def __init__(self):
@@ -639,10 +628,10 @@ def test_run_ui_refresh_repaints_when_background_task_finishes_while_waiting_for
                 keeper_live_rows=[
                     {
                         'instance_id': 'iid-fresh',
-                        'release_deadline': FixedDateTime(2026, 5, 9, 0, 0).isoformat(),
+                        'release_deadline': fixed_datetime(2026, 5, 9, 0, 0).isoformat(),
                     }
                 ],
-                keeper_live_checked_at=FixedDateTime.now(),
+                keeper_live_checked_at=fixed_datetime.now(),
                 service_snapshot={'status_label': '运行中', 'running': True},
                 message='已刷新最新状态: Keeper 1 台 | 服务 运行中',
             )
@@ -656,7 +645,7 @@ def test_run_ui_refresh_repaints_when_background_task_finishes_while_waiting_for
             fresh_rendered['value'] = True
         return real_print_dashboard(*args, **kwargs)
 
-    monkeypatch.setattr('autodl_helper.ui.app.datetime', FixedDateTime)
+    monkeypatch.setattr('autodl_helper.ui.app.datetime', fixed_datetime)
     monkeypatch.setattr('autodl_helper.ui.app.service_status', lambda config_path: {'status_label': '未安装', 'running': False})
     monkeypatch.setattr('autodl_helper.ui.app._start_refresh_task', lambda args: DelayedTask())
     monkeypatch.setattr('autodl_helper.ui.app._print_dashboard', spy_print_dashboard)
@@ -1579,13 +1568,7 @@ def test_dashboard_scheduled_counts_respect_runtime_pause(tmp_path, capsys, monk
     store.init_schema()
     store.set_task_control('main', 'scheduled_start', enabled=False, source='ui_scheduled_control')
 
-    class FixedDateTime(datetime):
-        @classmethod
-        def now(cls, tz=None):
-            base = cls(2026, 5, 8, 19, 30, tzinfo=tz)
-            return base
-
-    monkeypatch.setattr('autodl_helper.ui.app.datetime', FixedDateTime)
+    monkeypatch.setattr('autodl_helper.ui.app.datetime', fixed_shanghai_datetime(2026, 5, 8, 19, 30))
     monkeypatch.setattr('autodl_helper.ui.app.service_status', lambda config_path: {'status_label': '未安装', 'running': False})
 
     code = run_ui(SimpleNamespace(command='ui', config=str(config_path)))
@@ -1635,12 +1618,6 @@ def test_scheduled_dashboard_batches_window_history_queries(tmp_path, monkeypatc
     store = SQLiteStore(db_path)
     store.init_schema()
 
-    class FixedDateTime(datetime):
-        @classmethod
-        def now(cls, tz=None):
-            base = cls(2026, 5, 8, 19, 30, tzinfo=tz)
-            return base
-
     query_count = 0
     original_connect = store.connect
 
@@ -1664,7 +1641,7 @@ def test_scheduled_dashboard_batches_window_history_queries(tmp_path, monkeypatc
         def __getattr__(self, name):
             return getattr(self._conn, name)
 
-    monkeypatch.setattr('autodl_helper.ui.app.datetime', FixedDateTime)
+    monkeypatch.setattr('autodl_helper.ui.app.datetime', fixed_shanghai_datetime(2026, 5, 8, 19, 30))
     monkeypatch.setattr(store, 'connect', lambda: CountingConnection(original_connect()))
 
     lines = ui_app._scheduled_lines(settings, store)
