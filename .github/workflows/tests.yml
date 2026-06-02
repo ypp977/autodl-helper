@@ -88,6 +88,38 @@ jobs:
         run: |
           python main.py config validate --config config.test.yaml
 
-      - name: Run tests
+      - name: Run architecture tests
         run: |
-          pytest -q
+          pytest -q tests/architecture
+
+      - name: Run auth tests
+        run: |
+          pytest -q tests/auth
+
+      - name: Run CLI tests
+        run: |
+          pytest -q tests/cli
+
+      - name: Run runtime tests
+        run: |
+          pytest -q tests/runtime
+
+      - name: Run service tests
+        run: |
+          pytest -q tests/services
+
+      - name: Run storage tests
+        run: |
+          pytest -q tests/storage
+
+      - name: Run task tests
+        run: |
+          pytest -q tests/tasks
+
+      - name: Run UI tests
+        run: |
+          pytest -q tests/ui
+
+      - name: Run root tests
+        run: |
+          pytest -q tests/test_config.py tests/test_notify.py
