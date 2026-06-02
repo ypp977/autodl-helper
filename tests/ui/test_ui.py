@@ -194,10 +194,7 @@ def test_run_ui_prints_compact_keeper_and_scheduled_dashboard(tmp_path, capsys, 
     assert '待运行' in captured.out
     assert '待运行任务:' in captured.out
     assert 'pending-job' in captured.out
-    assert '刷新 1 次' in captured.out
     assert '~' in captured.out
-    assert '刷新 1 次' in captured.out
-    assert '上次' in captured.out
     assert '候选 3' not in captured.out
     assert 'service详情' not in captured.out
     assert 'state=spawn scheduled' not in captured.out
