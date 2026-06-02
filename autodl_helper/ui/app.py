@@ -33,6 +33,7 @@ from autodl_helper.tasks.scheduled_results import scheduled_result_label
 from autodl_helper.tasks.scheduled_start import ScheduledStartJobRuntime
 
 from .config_wizard import run_config_wizard
+from .background_input import BackgroundInputTask
 from .action_menus import (
     run_account_menu,
     run_daemon_control_menu,
@@ -914,28 +915,6 @@ def _start_service_status_task(args: Any) -> _ServiceStatusTask:
     return _ServiceStatusTask(args)
 
 
-class _InputTask:
-    def __init__(self, input_fn: Any, prompt: str):
-        self._queue: queue.Queue[tuple[str, Any]] = queue.Queue(maxsize=1)
-        self._thread = threading.Thread(target=self._run, args=(input_fn, prompt), name='ui-main-menu-input', daemon=True)
-        self._thread.start()
-
-    def _run(self, input_fn: Any, prompt: str) -> None:
-        try:
-            self._queue.put(('ok', input_fn(prompt)))
-        except Exception as exc:
-            self._queue.put(('error', exc))
-
-    def done(self) -> bool:
-        return not self._queue.empty()
-
-    def result(self) -> str:
-        status, payload = self._queue.get_nowait()
-        if status == 'error':
-            raise payload
-        return str(payload)
-
-
 def _consume_service_status_task(
     task: Any | None,
     current_snapshot: dict[str, Any] | None,
@@ -993,7 +972,7 @@ def _read_main_choice_with_background_repaint(
     if (refresh_task is None or refresh_task.done()) and (service_task is None or service_task.done()):
         return input_fn('选择编号: ').strip().lower(), refresh_task, service_task, keeper_live_rows, keeper_live_checked_at, service_snapshot, ''
 
-    input_task = _InputTask(input_fn, '选择编号: ')
+    input_task = BackgroundInputTask(input_fn, '选择编号: ')
     notice = ''
     while not input_task.done():
         changed = False

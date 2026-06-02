@@ -10,6 +10,7 @@ from autodl_helper.core.store import SQLiteStore
 from autodl_helper.ui import app as ui_app
 from autodl_helper.ui import run_ui
 from autodl_helper.ui.action_menus import account_status_text, run_daemon_control_menu, run_keeper_menu
+from autodl_helper.ui.account_menu import run_account_menu
 from autodl_helper.ui.render import GREEN, display_width, render_header, render_metric_row, render_rule, render_status
 
 
@@ -999,6 +1000,52 @@ def test_run_ui_keeper_once_does_not_block_when_execution_is_slow(tmp_path, caps
     assert 'Keeper 执行任务已提交' in captured.out
 
 
+def test_keeper_menu_repaints_when_background_task_finishes_while_waiting_for_input(tmp_path, capsys):
+    db_path = tmp_path / 'data' / 'autodl-helper.db'
+    config_path = tmp_path / 'config.yaml'
+    config_path.write_text(
+        '\n'.join([
+            'accounts:',
+            '  - name: main',
+            '    enabled: true',
+            '    authorization: Bearer token',
+            'storage:',
+            f'  database_file: {db_path}',
+            'tasks:',
+            '  keeper:',
+            '    enabled: true',
+        ]),
+        encoding='utf-8',
+    )
+
+    def delayed_keeper(**kwargs):
+        time.sleep(0.05)
+        return [SimpleNamespace(result='keeper_executed')]
+
+    prompts = {'count': 0}
+
+    def input_fn(prompt=''):
+        prompts['count'] += 1
+        if prompts['count'] == 1:
+            return '1'
+        time.sleep(0.2)
+        return '0'
+
+    notice = run_keeper_menu(
+        SimpleNamespace(config=str(config_path)),
+        input_fn=input_fn,
+        load_settings_fn=load_settings,
+        store_cls=SQLiteStore,
+        select_accounts_fn=lambda settings, account_name=None: [SimpleNamespace(name='main')],
+        run_keeper_only_fn=delayed_keeper,
+        result_label_fn=str,
+    )
+    captured = capsys.readouterr()
+
+    assert notice == ''
+    assert 'Keeper 已执行: 1 台 | 保活 1 | 跳过 0 | 失败 0' in strip_ansi(captured.out)
+
+
 def test_run_ui_keeper_details_uses_history_without_live_probe(tmp_path, capsys, monkeypatch):
     db_path = tmp_path / 'data' / 'autodl-helper.db'
     config_path = tmp_path / 'config.yaml'
@@ -1400,6 +1447,62 @@ def test_run_ui_account_health_check_does_not_block_input(tmp_path, capsys, monk
     assert code == 0
     assert elapsed < 0.5
     assert '账户健康检查已提交' in captured.out
+
+
+def test_account_menu_repaints_when_health_check_finishes_while_waiting_for_input(tmp_path, capsys):
+    db_path = tmp_path / 'data' / 'autodl-helper.db'
+    config_path = tmp_path / 'config.yaml'
+    config_path.write_text(
+        '\n'.join([
+            'accounts:',
+            '  - name: main',
+            '    enabled: true',
+            '    authorization: Bearer token',
+            'storage:',
+            f'  database_file: {db_path}',
+        ]),
+        encoding='utf-8',
+    )
+
+    class DelayedClient:
+        def list_instances(self):
+            time.sleep(0.05)
+            return [{'uuid': 'iid-1'}]
+
+    prompts = {'count': 0}
+
+    def input_fn(prompt=''):
+        prompts['count'] += 1
+        if prompts['count'] == 1:
+            return '4'
+        time.sleep(0.2)
+        return '0'
+
+    notice = run_account_menu(
+        SimpleNamespace(config=str(config_path), account=None, headed=False),
+        input_fn=input_fn,
+        load_settings_fn=load_settings,
+        store_cls=SQLiteStore,
+        select_accounts_fn=lambda settings, account_name=None: [settings.accounts[0]],
+        account_status_rows_fn=lambda settings, store, account_name=None: [
+            {
+                'account_name': 'main',
+                'enabled': True,
+                'status_label': '已登录',
+                'auth_source_label': '配置',
+                'cached_at_iso': '',
+                'has_credentials': False,
+                'has_config_token': True,
+                'lightweight_mode': 'normal',
+            }
+        ],
+        resolve_authorization_fn=lambda **kwargs: 'Bearer token',
+        build_client_fn=lambda *args, **kwargs: DelayedClient(),
+    )
+    captured = capsys.readouterr()
+
+    assert notice == ''
+    assert '账户健康检查: 正常 1 个 | 异常 0 个 | 正常 main(1 台)' in strip_ansi(captured.out)
 
 
 def test_run_ui_scheduled_management_is_read_only_business_page(tmp_path, capsys, monkeypatch):

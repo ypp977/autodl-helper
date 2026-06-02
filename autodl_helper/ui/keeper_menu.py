@@ -3,12 +3,14 @@ from __future__ import annotations
 import builtins
 import queue
 import threading
+import time
 from collections import Counter
 from typing import Any, Callable
 
 from autodl_helper.cli.shared_settings import validate_settings
 from autodl_helper.tasks.keeper_results import keeper_reason_label, keeper_result_label
 
+from .background_input import BackgroundInputTask
 from .render import BLUE, CYAN, GREEN, RED, YELLOW, clear_screen, color, print_menu_groups, render_notice, render_rule, render_section
 
 
@@ -272,6 +274,45 @@ def _consume_keeper_run_task(task: Any | None) -> tuple[Any | None, str]:
         return None, f'Keeper 执行失败: {exc}'
 
 
+def _print_keeper_menu(notice: str) -> None:
+    clear_screen(enabled=True)
+    print(f'\n{render_section("Keeper 管理", color_enabled=True)}')
+    print(render_rule())
+    if notice:
+        print(render_notice(notice, color_enabled=True))
+    print(color('配置入口: 配置管理 > Keeper 配置', BLUE))
+    print_menu_groups([
+        ('执行', [('1', '立即执行'), ('2', '恢复任务')]),
+        ('查看', [('3', '执行详情')]),
+        ('返回', [('0', '返回')]),
+    ])
+
+
+def _read_keeper_choice_with_background_repaint(
+    *,
+    input_fn: Any,
+    keeper_task: Any | None,
+) -> tuple[str, Any | None, str]:
+    if keeper_task is None:
+        return input_fn('选择编号: ').strip().lower(), keeper_task, ''
+    if keeper_task.done():
+        keeper_task, notice = _consume_keeper_run_task(keeper_task)
+        if notice:
+            _print_keeper_menu(notice)
+        return input_fn('选择编号: ').strip().lower(), keeper_task, notice
+
+    input_task = BackgroundInputTask(input_fn, '选择编号: ')
+    notice = ''
+    while not input_task.done():
+        keeper_task, keeper_notice = _consume_keeper_run_task(keeper_task)
+        if keeper_notice:
+            notice = keeper_notice
+            _print_keeper_menu(notice)
+            print('选择编号: ', end='', flush=True)
+        time.sleep(0.05)
+    return input_task.result().strip().lower(), keeper_task, notice
+
+
 def run_keeper_menu(
     args: Any,
     *,
@@ -288,19 +329,14 @@ def run_keeper_menu(
         keeper_task, keeper_notice = _consume_keeper_run_task(keeper_task)
         if keeper_notice:
             notice = keeper_notice
-        clear_screen(enabled=True)
-        print(f'\n{render_section("Keeper 管理", color_enabled=True)}')
-        print(render_rule())
-        if notice:
-            print(render_notice(notice, color_enabled=True))
-            notice = ''
-        print(color('配置入口: 配置管理 > Keeper 配置', BLUE))
-        print_menu_groups([
-            ('执行', [('1', '立即执行'), ('2', '恢复任务')]),
-            ('查看', [('3', '执行详情')]),
-            ('返回', [('0', '返回')]),
-        ])
-        choice = input_fn('选择编号: ').strip().lower()
+        _print_keeper_menu(notice)
+        notice = ''
+        choice, keeper_task, input_notice = _read_keeper_choice_with_background_repaint(
+            input_fn=input_fn,
+            keeper_task=keeper_task,
+        )
+        if input_notice:
+            notice = input_notice
         if choice == '0':
             return ''
         if choice == '1':

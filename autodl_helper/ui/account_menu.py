@@ -4,12 +4,14 @@ import builtins
 import getpass
 import queue
 import threading
+import time
 from typing import Any, Callable
 
 from autodl_helper.core.auth import AuthError
 from autodl_helper.core.config import read_raw_settings, write_raw_settings
 from autodl_helper.runtime_control import request_config_reload
 
+from .background_input import BackgroundInputTask
 from .render import BLUE, CYAN, GREEN, RED, YELLOW, clear_screen, color, pad_display, print_menu_groups, render_notice, render_rule, render_section
 
 
@@ -488,6 +490,49 @@ def _consume_account_health_task(task: Any | None) -> tuple[Any | None, str]:
         return None, f'账户健康检查失败: {exc}'
 
 
+def _read_account_choice_with_background_repaint(
+    args: Any,
+    *,
+    input_fn: Any,
+    health_task: Any | None,
+    load_settings_fn: Callable[[str], Any],
+    store_cls: type,
+    account_status_rows_fn: Callable[..., list[dict[str, Any]]],
+) -> tuple[str, Any | None, str]:
+    if health_task is None:
+        return input_fn('选择编号: ').strip().lower(), health_task, ''
+    if health_task.done():
+        health_task, notice = _consume_account_health_task(health_task)
+        if notice:
+            print_account_menu(
+                args,
+                notice=notice,
+                clear=True,
+                load_settings_fn=load_settings_fn,
+                store_cls=store_cls,
+                account_status_rows_fn=account_status_rows_fn,
+            )
+        return input_fn('选择编号: ').strip().lower(), health_task, notice
+
+    input_task = BackgroundInputTask(input_fn, '选择编号: ')
+    notice = ''
+    while not input_task.done():
+        health_task, health_notice = _consume_account_health_task(health_task)
+        if health_notice:
+            notice = health_notice
+            print_account_menu(
+                args,
+                notice=notice,
+                clear=True,
+                load_settings_fn=load_settings_fn,
+                store_cls=store_cls,
+                account_status_rows_fn=account_status_rows_fn,
+            )
+            print('选择编号: ', end='', flush=True)
+        time.sleep(0.05)
+    return input_task.result().strip().lower(), health_task, notice
+
+
 def run_account_menu(
     args: Any,
     *,
@@ -514,7 +559,16 @@ def run_account_menu(
             account_status_rows_fn=account_status_rows_fn,
         )
         notice = ''
-        choice = input_fn('选择编号: ').strip().lower()
+        choice, health_task, input_notice = _read_account_choice_with_background_repaint(
+            args,
+            input_fn=input_fn,
+            health_task=health_task,
+            load_settings_fn=load_settings_fn,
+            store_cls=store_cls,
+            account_status_rows_fn=account_status_rows_fn,
+        )
+        if input_notice:
+            notice = input_notice
         if choice == '0':
             return ''
         if choice in {'', '1'}:
