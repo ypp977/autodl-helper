@@ -128,9 +128,13 @@ jobs:
         run: |
           pytest -q tests/tasks/test_result_labels.py
 
-      - name: Run UI tests
+      - name: Run UI config wizard tests
         run: |
-          pytest -q tests/ui
+          pytest -q tests/ui/test_config_wizard.py
+
+      - name: Run terminal UI tests
+        run: |
+          pytest -q tests/ui/test_ui.py
 
       - name: Run root tests
         run: |
