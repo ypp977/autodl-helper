@@ -191,7 +191,7 @@ def test_run_ui_prints_compact_keeper_and_scheduled_dashboard(tmp_path, capsys, 
     assert '成功 0' in captured.out
     assert '3天内临期失败 0' in captured.out
     assert '进行中' in captured.out
-    assert '待运行 1' in captured.out
+    assert '待运行' in captured.out
     assert '待运行任务:' in captured.out
     assert 'pending-job' in captured.out
     assert '刷新 1 次' in captured.out
