@@ -132,9 +132,30 @@ jobs:
         run: |
           pytest -q tests/ui/test_config_wizard.py
 
-      - name: Run terminal UI tests
+      - name: Run terminal UI render tests
         run: |
-          pytest -q tests/ui/test_ui.py
+          pytest -q tests/ui/test_ui.py \
+            -k "render or metric_rows or account_status_table or compact_keeper or first_screen or stale_heartbeat or launchd_config_error or keeper_dashboard or initial_render or refresh_fetches"
+
+      - name: Run terminal UI refresh tests
+        run: |
+          pytest -q tests/ui/test_ui.py \
+            -k "refresh_updates or refresh_dashboard_snapshot or refresh_submits or refresh_repaints or does_not_build_client or unknown_top_level or grouped_actions or start_daemon or execute_keeper or failure_reason or paused_keeper or disabled_keeper or slow"
+
+      - name: Run terminal UI menu tests
+        run: |
+          pytest -q tests/ui/test_ui.py \
+            -k "keeper_menu or keeper_details or daemon_and_keeper or account_management or add_account or numeric_account or select_account or toggle_edit or config_save or account_menu or health_check"
+
+      - name: Run terminal UI scheduled tests
+        run: |
+          pytest -q tests/ui/test_ui.py \
+            -k "scheduled"
+
+      - name: Run terminal UI keeper resume tests
+        run: |
+          pytest -q tests/ui/test_ui.py \
+            -k "resume_paused_keeper"
 
       - name: Run root tests
         run: |
