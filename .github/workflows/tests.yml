@@ -68,26 +68,25 @@ jobs:
         run: |
           python -m py_compile $(find autodl_helper -name '*.py')
 
-      - name: CLI smoke test
+      - name: Smoke CLI entrypoint
         run: |
-          run_smoke() {
-            echo "::group::$*"
-            set +e
-            "$@"
-            status=$?
-            set -e
-            echo "::endgroup::"
-            if [ "$status" -ne 0 ]; then
-              echo "CLI smoke command failed: $*" >&2
-              exit "$status"
-            fi
-          }
+          autodl-helper --help
 
-          run_smoke autodl-helper --help
-          run_smoke python main.py --help
-          run_smoke python -m autodl_helper --help
-          run_smoke python main.py config validate --config config.example.yaml
-          run_smoke python main.py config validate --config config.test.yaml
+      - name: Smoke main.py entrypoint
+        run: |
+          python main.py --help
+
+      - name: Smoke module entrypoint
+        run: |
+          python -m autodl_helper --help
+
+      - name: Smoke example config validation
+        run: |
+          python main.py config validate --config config.example.yaml
+
+      - name: Smoke test config validation
+        run: |
+          python main.py config validate --config config.test.yaml
 
       - name: Run tests
         run: |
