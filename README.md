@@ -1,15 +1,15 @@
 # autodl-helper
 
-`autodl-helper` 是一个小而美的 AutoDL 自动化 CLI 工具，核心只做四件事：
+`autodl-helper` 是一个 AutoDL 自动化命令行工具，核心只做四件事：
 
-- scheduled-start 抢机轮询
+- 抢机轮询
 - Keeper 保活与止损
-- daemon 后台运行
+- 守护进程后台运行
 - 本地配置、日志、SQLite 历史与基础诊断
 
-项目不提供 GUI 客户端。Docker 镜像只跑 daemon。macOS / Windows / Linux 推荐通过 `pipx`、`venv` 或 Nuitka console executable 使用。
+项目不提供图形界面客户端。Docker 镜像只运行守护进程。macOS、Windows、Linux 推荐通过 `pipx`、`venv` 或 Nuitka 控制台可执行文件使用。
 
-## Public entrypoints
+## 公开入口
 
 ```bash
 autodl-helper --help
@@ -17,7 +17,7 @@ python main.py --help
 python -m autodl_helper --help
 ```
 
-## Documentation
+## 文档
 
 - 命令说明：`docs/COMMANDS.md`
 - 配置说明：`docs/CONFIGURATION.md`
@@ -27,17 +27,17 @@ python -m autodl_helper --help
 - 开发指南：`docs/DEVELOPMENT.md`
 - 排障手册：`docs/TROUBLESHOOTING.md`
 
-## Platform support
+## 平台支持
 
-| Capability | macOS | Linux | Windows | Docker |
+| 能力 | macOS | Linux | Windows | Docker |
 | --- | --- | --- | --- | --- |
-| CLI | ✅ | ✅ | ✅ | ✅ |
-| daemon | ✅ | ✅ | ✅ | ✅ |
-| service backend | LaunchAgent | systemd user | Task Scheduler | 不适用 |
-| terminal UI | ✅ | ✅ | ✅ | ❌ |
-| Nuitka executable | ✅ | 可自行构建 | ✅ | 不适用 |
+| 命令行 | ✅ | ✅ | ✅ | ✅ |
+| 守护进程 | ✅ | ✅ | ✅ | ✅ |
+| 后台服务托管 | LaunchAgent | systemd 用户服务 | Task Scheduler | 不适用 |
+| 终端 UI | ✅ | ✅ | ✅ | ❌ |
+| Nuitka 可执行文件 | ✅ | 可自行构建 | ✅ | 不适用 |
 
-## Install
+## 安装
 
 推荐二选一：
 
@@ -60,9 +60,9 @@ autodl-helper init
 autodl-helper ui --config config.yaml
 ```
 
-从源码运行时把 `autodl-helper` 换成 `./.venv/bin/python main.py`。Windows 把 `./.venv/bin/python` 换成 `.\.venv\Scripts\python`。
+从源码运行时，把 `autodl-helper` 换成 `./.venv/bin/python main.py`。Windows 把 `./.venv/bin/python` 换成 `.\.venv\Scripts\python`。
 
-## Common commands
+## 常用命令
 
 ```bash
 autodl-helper ui --config config.yaml
@@ -77,9 +77,9 @@ autodl-helper config validate --config config.yaml
 
 完整命令只维护在 `docs/COMMANDS.md`。
 
-## Docker daemon
+## Docker 守护进程
 
-Docker 只负责 daemon，不支持 UI、不发布端口。
+Docker 只负责运行守护进程，不支持 UI、不发布端口。
 
 ```bash
 docker build -t autodl-helper:local .
@@ -97,13 +97,13 @@ docker run --rm \
 autodl-helper run daemon --config /app/config.yaml
 ```
 
-Compose:
+Docker Compose：
 
 ```bash
 docker compose up -d --build
 ```
 
-## Local files
+## 本地文件
 
 默认本地文件：
 
@@ -115,11 +115,11 @@ docker compose up -d --build
 
 这些文件包含本地状态或凭据，不应提交。
 
-## Architecture
+## 架构
 
-目标结构见 `docs/architecture-slimming.md`。当前公开 API 只保证命令入口和 `config.yaml` 字段兼容；内部 import 路径不再作为兼容面维护。
+目标结构见 `docs/architecture-slimming.md`。当前公开接口只保证命令入口和 `config.yaml` 字段兼容；内部导入路径不作为兼容面维护。
 
-## Development
+## 开发
 
 ```bash
 ./.venv/bin/python -m pytest -q
@@ -128,17 +128,17 @@ docker compose up -d --build
 ./.venv/bin/python -m py_compile $(find autodl_helper -name '*.py') main.py
 ```
 
-## Limitations
+## 限制
 
-- Docker 仅 daemon，不支持 UI。
+- Docker 仅运行守护进程，不支持 UI。
 - SQLite 历史允许重建，不提供跨版本迁移承诺。
 - Playwright 依赖目标环境的浏览器安装。
 - Nuitka 可执行文件不包含浏览器资源。
 
-## License
+## 许可
 
-MIT. See `LICENSE`.
+MIT，见 `LICENSE`。
 
-## Acknowledgement
+## 致谢
 
-本项目当前由 `ypp977` 独立维护。项目早期参考并演进自 [turbo-duck/autodl-keeper](https://github.com/turbo-duck/autodl-keeper)，并保留 MIT License 要求的许可与版权声明。
+本项目当前由 `ypp977` 独立维护。项目早期参考并演进自 [turbo-duck/autodl-keeper](https://github.com/turbo-duck/autodl-keeper)，并保留 MIT 许可要求的许可与版权声明。

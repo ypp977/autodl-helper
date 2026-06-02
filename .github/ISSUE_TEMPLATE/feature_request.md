@@ -1,27 +1,27 @@
 ---
-name: Feature request
-about: Propose an improvement or new feature
+name: 功能建议
+about: 提出改进建议或新功能
 title: "[feature] "
 labels: enhancement
 assignees: ""
 ---
 
-## Problem
+## 问题
 
-What user problem are you trying to solve?
+你想解决什么用户问题？
 
-## Proposed solution
+## 建议方案
 
-Describe the behavior you want.
+请描述你希望看到的行为。
 
-## Why this belongs in autodl-helper
+## 为什么适合 autodl-helper
 
-Explain why this fits the project scope.
+请说明它为什么符合本项目范围。
 
-## Alternatives considered
+## 已考虑的替代方案
 
-What other approaches did you consider?
+你还考虑过哪些做法？
 
-## Additional context
+## 其他信息
 
-Examples, screenshots, workflows, or related tools.
+可补充示例、截图、工作流或相关工具。

@@ -1,21 +1,21 @@
-## Summary
+## 摘要
 
-- what changed
-- why it changed
+- 改了什么
+- 为什么要改
 
-## Validation
+## 验证
 
 - [ ] `pytest -q`
 - [ ] `python -m py_compile $(find autodl_helper -name '*.py')`
-- [ ] relevant manual flow checked
+- [ ] 已检查相关手动流程
 
-## Checklist
+## 检查清单
 
-- [ ] no secrets added
-- [ ] no private account data added
-- [ ] docs updated if behavior changed
-- [ ] config examples updated if config behavior changed
+- [ ] 没有加入密钥
+- [ ] 没有加入私有账号数据
+- [ ] 用户可见行为变化时已更新文档
+- [ ] 配置行为变化时已更新示例配置
 
-## Notes
+## 备注
 
-Anything reviewers should pay attention to.
+需要审查者重点关注的内容。

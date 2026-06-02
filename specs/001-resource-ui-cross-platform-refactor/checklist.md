@@ -1,70 +1,59 @@
-# Checklist: resource, UI, and cross-platform refactor
+# 清单：资源、UI 与跨平台重构
 
-## Governance Checklist
+## 治理清单
 
-- [x] Impact scope assessed as cross-module.
-- [x] Spec Kit required.
-- [x] Spec created.
-- [x] Plan created.
-- [x] Tasks created.
-- [x] Current dirty worktree resolved or explicitly carried forward.
-  Carried forward: UI action/menu tests and Spec Kit files remain uncommitted by design.
-- [x] Baseline tests captured after dirty worktree decision.
-  2026-05-25 baseline: full suite 234 passed.
+- [x] 影响范围已评估为跨模块。
+- [x] 需要规格套件。
+- [x] 已创建规格。
+- [x] 已创建计划。
+- [x] 已创建任务。
+- [x] 当前脏工作树已处理或明确纳入。
+- [x] 脏工作树处理后已记录基线测试。
 
-## Architecture Checklist
+## 架构清单
 
-- [x] Core/runtime/tasks/services do not import CLI or UI.
-- [x] UI does not import `autodl_helper.cli.app`.
-- [x] CLI facade modules remain thin.
-- [x] No wildcard imports under `autodl_helper`.
-- [x] New shared logic lives below CLI/UI adapters.
-  Runtime PID helpers and task result label helpers live under runtime/tasks; UI/CLI adapters consume them.
+- [x] `core` / `runtime`、`tasks`、`services` 不导入 CLI 或 UI。
+- [x] UI 不导入 `autodl_helper.cli.app`。
+- [x] CLI 门面模块保持轻薄。
+- [x] `autodl_helper` 下没有通配符导入。
+- [x] 新共享逻辑放在 CLI/UI 适配器下层或 UI 专属共享工具中。
+  runtime PID 辅助函数和任务结果标签辅助函数位于 `runtime` / `tasks`；UI 后台输入重绘辅助函数位于 UI 包内。
 
-## Resource Checklist
+## 资源清单
 
-- [x] Disabled tasks short-circuit before client/API creation.
-  Covered by Keeper and scheduled-start runtime tests.
-- [x] Paused Keeper short-circuits before task execution.
-- [x] Dashboard live API calls are explicit, cached, or justified.
-  Keeper dashboard uses local SQLite history; live API calls are explicit actions such as Keeper execution or account health checks.
-- [x] Browser login is not triggered by passive dashboard rendering.
-  Verified for password-only and token accounts by dashboard tests that fail on client creation.
-- [x] Background dispatch cadence is predictable and avoids duplicate work.
-  Covered by daemon dispatch interval gating test.
+- [x] 停用任务在创建客户端/接口调用前短路。
+- [x] 暂停 Keeper 在任务执行前短路。
+- [x] 看板实时接口调用都是显式、缓存或有理由的。
+  Keeper 看板使用本地 SQLite 历史；实时接口调用保留在 Keeper 执行和账户健康检查等显式操作中。
+- [x] 被动看板渲染不触发浏览器登录。
+- [x] 后台调度间隔可预测，避免重复工作。
 
-## UI Checklist
+## UI 清单
 
-- [x] Main menu has clear groups.
-  Main actions are grouped as 常用/配置/任务/系统 and covered by `test_run_ui_main_menu_uses_grouped_actions`.
-- [x] Submenus redraw consistently.
-  Keeper, daemon, account, config, and scheduled menus use page redraw with notices in focused UI tests.
-- [x] Notices are shown consistently.
-  Draft changes stay labeled as draft until saved; save success uses saved/reload wording.
-- [x] Return behavior is consistent.
-  Config returns after save, no-change paths do not mark dirty, and scheduled draft changes are saved through the config wizard.
-- [x] Keeper details explain due/skip/failure states.
-  Initial history-based details page shows account, instance, result, normalized reason, next keeper time, and release time.
-- [x] Failure summaries are concise with optional detail path.
-  Keeper failure summaries stay aggregated and point to Keeper details for drill-down.
+- [x] 主菜单分组清晰。
+- [x] 子菜单一致重绘。
+- [x] 提示展示一致。
+- [x] 返回行为一致。
+- [x] Keeper 详情解释临期、跳过和失败状态。
+- [x] 失败摘要简洁，并提供详情入口。
+- [x] 主看板刷新完成后自动重绘。
+- [x] Keeper 立即执行完成后自动重绘。
+- [x] 账户健康检查完成后自动重绘。
 
-## Cross-Platform Checklist
+## 跨平台清单
 
-- [x] macOS LaunchAgent tests pass.
-- [x] Linux systemd user service tests pass.
-- [x] Windows Task Scheduler tests pass.
-- [x] Runtime code avoids POSIX-only assumptions outside service backends.
-  PID checks and detached background launch are centralized behind platform branches; focused runtime/CLI/service tests pass.
-- [x] Paths are config-relative where documented.
-  Config loader resolves database/cache paths from config dir; scheduled background lock/state and service logs are covered by tests.
+- [x] macOS LaunchAgent 测试通过。
+- [x] Linux systemd 用户服务测试通过。
+- [x] Windows Task Scheduler 测试通过。
+- [x] 服务后端外的 `runtime` 代码避免 POSIX-only 假设。
+- [x] 路径按文档相对配置目录解析。
 
-## Verification Checklist
+## 验证清单
 
-- [x] Focused tests pass for changed modules.
-  Latest focused run: CLI + UI config + docs-adjacent checks, 92 passed.
-- [x] `ruff check` passes for changed files.
-- [x] `PYTHONPATH=. python -m pytest -q` passes.
-  Latest run on 2026-05-25 with conda env `autodl-helper`: 248 passed.
-- [x] Architecture tests pass.
-- [x] User-visible docs updated where behavior changes.
-  README, COMMANDS, TROUBLESHOOTING, DEVELOPMENT, and architecture guardrails reflect the updated UI/resource behavior.
+- [x] 变更模块聚焦测试通过。
+- [x] `ruff check .` 通过。
+- [x] `python -m pytest -q` 通过。
+  最新全量记录：297 个测试通过。
+- [x] 架构测试通过。
+- [x] 用户可见行为已更新文档。
+  README、COMMANDS、TROUBLESHOOTING、DEVELOPMENT、架构约束和规格文档均已校准到当前 UI/资源行为。

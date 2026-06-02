@@ -1,39 +1,39 @@
 ---
-name: Config help
-about: Ask for help with configuration or runtime setup
+name: 配置求助
+about: 咨询配置或运行环境问题
 title: "[config] "
 labels: question
 assignees: ""
 ---
 
-## Goal
+## 目标
 
-What are you trying to configure?
+你想配置什么功能？
 
-## Current config snippet
+## 当前配置片段
 
-Paste a **sanitized** config snippet only.
+请只粘贴已脱敏的配置片段。
 
 ```yaml
-# remove tokens, phone numbers, real instance IDs
+# 删除令牌、手机号、真实实例 ID
 ```
 
-## Current behavior
+## 当前行为
 
-What does the tool do now?
+工具现在的表现是什么？
 
-## Expected behavior
+## 预期行为
 
-What do you want it to do?
+你希望它怎么工作？
 
-## Relevant commands
+## 相关命令
 
 ```bash
-# paste commands you ran
+# 粘贴你执行过的命令
 ```
 
-## Relevant output
+## 相关输出
 
 ```text
-# paste sanitized output
+# 粘贴已脱敏的输出
 ```

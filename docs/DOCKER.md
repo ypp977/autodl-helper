@@ -1,27 +1,26 @@
-# Docker
+# Docker 使用说明
 
-The Docker image is daemon-only. It does not expose or support a Web UI.
+Docker 镜像只运行守护进程，不提供网页界面，也不开放端口。
 
-## Default command
+## 默认命令
 
-The container default command is:
+容器默认命令是：
 
 ```bash
 autodl-helper run daemon --config /app/config.yaml
 ```
 
-The image runs the foreground daemon by default through `autodl-helper run daemon`.
+也就是说，镜像默认以前台守护进程方式运行。
 
-## Build
+## 构建镜像
 
 ```bash
 docker build -t autodl-helper:local .
 ```
 
-The image includes a sample `/app/config.yaml` copied from `config.example.yaml`. For real
-use, bind-mount your own config instead of baking secrets into the image.
+镜像内会包含一份从 `config.example.yaml` 复制的 `/app/config.yaml` 示例。真实使用时应挂载本地配置，不要把密钥或账号信息写进镜像。
 
-## Run with Docker
+## 使用 Docker 运行
 
 ```bash
 docker run --rm \
@@ -32,11 +31,10 @@ docker run --rm \
   autodl-helper:local
 ```
 
-## Run with Compose
+## 使用 Docker Compose 运行
 
 ```bash
 docker compose up -d --build
 ```
 
-`compose.yaml` mounts local `config.yaml`, `data/`, `logs/`, and `.cache/`. No ports are
-published because the container does not provide a UI.
+`compose.yaml` 会挂载本地 `config.yaml`、`data/`、`logs/` 和 `.cache/`。容器不提供 UI，因此不会发布端口。

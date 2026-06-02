@@ -1,4 +1,4 @@
-# Architecture
+# 架构
 
 当前架构约束见 `docs/architecture-slimming.md`。
 

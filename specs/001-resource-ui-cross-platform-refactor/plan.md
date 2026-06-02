@@ -1,82 +1,83 @@
-# Plan: resource, UI, and cross-platform refactor
+# 计划：资源、UI 与跨平台重构
 
-## Phase 0: Baseline and Governance
+## 阶段 0：基线与治理
 
-1. Preserve current uncommitted work or commit it before large refactors.
-2. Capture baseline verification:
-   - full tests
-   - architecture tests
-   - service backend tests
-3. Map hot paths:
-   - daemon dispatch
-   - UI dashboard rendering
-   - Keeper execution
-   - scheduled-start execution
-   - auth refresh and browser login
+1. 在大范围重构前保留或提交当前未提交改动。
+2. 记录基线验证：
+   - 全量测试
+   - 架构测试
+   - 服务后端测试
+3. 梳理热点路径：
+   - 守护进程调度
+   - UI 看板渲染
+   - Keeper 执行
+   - 抢机执行
+   - 授权刷新和浏览器登录
 
-## Phase 1: UI Interaction Cleanup
+## 阶段 1：UI 交互清理
 
-1. Finish consistent submenu redraw and notice behavior.
-2. Add Keeper precheck and detail flows.
-3. Split UI rendering from UI actions where it reduces coupling.
-4. Keep terminal UI dense and operational, not decorative.
+1. 完成子菜单一致的重绘和提示行为。
+2. 增加 Keeper 预检和详情流程。
+3. 在能降低耦合时拆分 UI 渲染和 UI 动作。
+4. 终端 UI 保持密集、操作型，不做装饰型界面。
+5. 后台耗时操作完成后自动重绘当前页面。
 
-Verification:
+验证：
 
-- UI tests for page redraw, notices, return behavior, and Keeper precheck.
-- Manual smoke: `autodl-helper ui --config config.yaml`.
+- UI 测试覆盖页面重绘、提示、返回行为、Keeper 预检和后台任务完成重绘。
+- 手动冒烟：`autodl-helper ui --config config.yaml`。
 
-## Phase 2: Runtime Resource Reduction
+## 阶段 2：运行时资源降低
 
-1. Audit daemon loops for duplicate work.
-2. Ensure disabled/paused/not-due tasks short-circuit before API work.
-3. Make live dashboard probing opt-in or cached where safe.
-4. Keep browser/auth refresh out of idle paths.
+1. 审计守护进程循环中的重复工作。
+2. 确保停用、暂停、未到期任务在构建客户端或接口调用前短路。
+3. 被动看板不做实时接口探测。
+4. 空闲路径不触发浏览器登录或授权强刷。
 
-Verification:
+验证：
 
-- Runtime tests for dispatch cadence and task gating.
-- Focused tests that assert no client/API creation when disabled or paused.
+- `runtime` 测试覆盖调度间隔和任务门禁。
+- 聚焦测试证明停用或暂停时不会创建客户端或访问接口。
 
-## Phase 3: Task Logic Boundaries
+## 阶段 3：任务逻辑边界
 
-1. Keep Keeper timing/result rules in task modules, not UI/CLI.
-2. Extract scheduled-start selection and result formatting only where ownership is clear.
-3. Normalize failure categories across Keeper and scheduled-start.
+1. Keeper 时间和结果规则保留在任务模块，不放进 UI/CLI。
+2. 仅在职责清晰时提取抢机选择和结果格式化。
+3. 归一化 Keeper 和抢机的失败类别。
 
-Verification:
+验证：
 
-- Keeper tests.
-- Scheduled-start tests.
-- CLI/UI output tests for summaries.
+- Keeper 测试。
+- 抢机测试。
+- CLI/UI 摘要输出测试。
 
-## Phase 4: Cross-Platform Service Hardening
+## 阶段 4：跨平台服务加固
 
-1. Keep platform-specific code isolated in service backends.
-2. Verify service install/start/status/stop semantics for:
+1. 平台专属代码隔离在服务后端。
+2. 验证服务 install/start/status/stop 语义：
    - launchd
-   - systemd user service
+   - systemd 用户服务
    - Windows Task Scheduler
-3. Avoid adding runtime shell assumptions outside service modules.
+3. 避免在服务模块之外增加运行时 shell 假设。
 
-Verification:
+验证：
 
 - `tests/services/test_service_launchd.py`
 - `tests/services/test_service_systemd.py`
 - `tests/services/test_service_windows_task.py`
 
-## Phase 5: Documentation and Release Readiness
+## 阶段 5：文档与发布准备
 
-1. Update concise install/run docs only where commands change.
-2. Update troubleshooting for resource usage, Keeper precheck, and account health.
-3. Keep docs short and command-focused.
+1. 命令变化时只更新必要的安装/运行文档。
+2. 更新资源占用、Keeper 预检、账户健康检查和后台重绘排障说明。
+3. 文档保持简洁，以命令和行为为中心。
 
-## Quality Gates
+## 质量门禁
 
-Before each phase is considered complete:
+每个阶段完成前必须满足：
 
-- No unrelated git churn.
-- Focused tests pass.
-- Full test suite passes.
-- Changed behavior is documented if user-visible.
-- Work remains cross-platform by construction or by tests.
+- 没有无关 git 噪声。
+- 聚焦测试通过。
+- 全量测试通过。
+- 用户可见行为已更新文档。
+- 通过实现或测试保持跨平台属性。

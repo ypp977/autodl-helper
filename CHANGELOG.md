@@ -1,72 +1,102 @@
-# Changelog
+# 变更日志
 
-All notable changes to this project will be documented in this file.
+本文件记录用户可见的重要变化。
 
-## [2026-04-07] autodl-helper Operations And Selector Release
+## 当前开发版
 
-### Added
+### 新增
 
-- Added auth token cache support with local cache file, cache TTL, startup cache reuse, and cache refresh after login.
-- Added `run-all`, `run-keeper`, `run-scheduled-start`, `watch-instance`, and `healthcheck` commands.
-- Added selector-based scheduled-start jobs with exact filters for region, GPU model, GPU count, and charge type.
-- Added explicit priority ordering for multi-candidate selector jobs.
+- 终端 UI 改为按职责分层：刷新状态、业务操作、设置管理、守护进程管理。
+- 业务操作页新增 Keeper 管理、抢机管理和运行时暂停/恢复能力。
+- 抢机任务支持运行时暂停/恢复单个任务，以及按账号暂停/恢复全部抢机。
+- 抢机任务支持 `daily`、`once`、`weekly` 调度模式。
+- 账户管理新增账号健康检查和当前账号登录入口。
+- CLI 增加 `accounts` 快速查看入口。
+- JSON 输出采用稳定结构，错误输出会对敏感字段脱敏。
 
-### Changed
+### 变更
 
-- Switched scheduled-start runtime output from plain strings to structured results with `result` and `reason`.
-- Upgraded scheduled-start notifications to include instance status, `gpu_idle_num`, `start_mode`, deadline, and selector metadata.
-- Updated example configuration and README to document selector jobs, token cache, watch mode, healthcheck, and new daemon commands.
-- Changed Docker default command to `python main.py run-all`.
+- 配置管理改为“保存即返回”，保存成功后请求守护进程重载。
+- Keeper 首页临期窗口按 `keeper_trigger_before_hours` 显示，不再固定为 3 天或 15 天。
+- Keeper 执行结果展示改为更简洁的摘要和百分比进度。
+- 主菜单刷新、Keeper 立即执行、账户健康检查改为后台提交，完成后自动重绘当前页面。
+- 被动看板只读取本地 SQLite 历史；实时 AutoDL 请求只在显式操作中触发。
+- 后台服务状态显示统一为守护进程、服务托管和最近心跳三类信息。
+- 文档改为中文，并同步最新命令、配置、终端 UI、后台刷新和隐私说明。
 
-### Fixed
+### 修复
 
-- Refreshes auth on HTTP auth failures and business-layer auth failures, then retries the current request once.
-- Debug/ops commands no longer depend on unrelated scheduled-start validation.
+- 修复刷新状态完成后仍停留在“刷新中”的问题。
+- 修复 Keeper 和账户子菜单后台任务完成后不自动重绘的问题。
+- 修复配置保存后 UI 仍使用旧 Keeper 临期口径的问题。
+- 修复运行时暂停/恢复和配置停用状态混淆的问题。
+- 修复部分 CLI 错误输出不稳定、敏感信息脱敏不完整的问题。
 
-## [2026-04-07] autodl-helper Productization Release
+## 2026-04-07：运维与选择器版本
 
-### Added
+### 新增
 
-- Added a modular `autodl_helper/` package with dedicated auth, API, config, lock, state, notify, and task modules.
-- Added multi-instance scheduled-start support with independent per-job execution and deduplicated notifications.
-- Added operational subcommands: `run`, `list-instances`, `test-notify`, and `validate-config`.
-- Added JSON/table instance listing and notification smoke-test support.
-- Added configuration validation for auth, scheduled-start jobs, and notification backends.
-- Added test coverage for CLI commands, notification isolation, multi-job runtime behavior, and scheduled-start deduplication.
+- 增加本地令牌缓存，支持缓存文件、缓存过期时间、启动时复用缓存和登录后刷新缓存。
+- 增加 `run-all`、`run-keeper`、`run-scheduled-start`、`watch-instance` 和 `healthcheck` 命令。
+- 增加基于选择器的抢机任务，可按地域、GPU 型号、GPU 数量和计费类型精确筛选。
+- 增加多候选实例的显式优先级排序。
 
-### Changed
+### 变更
 
-- Renamed the project from `autodl-keeper` to `autodl-helper` in docs and packaging-facing surfaces.
-- Switched CLI usage to subcommands instead of flat flags.
-- Updated example configuration to show real multi-job scheduled-start usage.
+- 抢机运行时输出从普通字符串改为包含 `result` 和 `reason` 的结构化结果。
+- 抢机通知增加实例状态、`gpu_idle_num`、`start_mode`、截止时间和选择器元数据。
+- 示例配置和 README 增加选择器任务、令牌缓存、观察模式、健康检查和守护进程命令说明。
+- Docker 默认命令改为 `python main.py run-all`。
 
-### Fixed
+### 修复
 
-- Isolated notifier failures so one broken notification channel no longer blocks the rest.
-- Logged per-job scheduled-start results during daemon runs for easier operations debugging.
-- Aligned Docker runtime entrypoint with the current CLI.
+- HTTP 鉴权失败和业务层鉴权失败时会刷新认证信息，并对当前请求重试一次。
+- 调试和运维命令不再依赖无关的抢机配置校验。
 
-## [2026-04-03] Maintenance And Security Update
+## 2026-04-07：产品化版本
 
-### Added
+### 新增
 
-- Added `.dockerignore` to avoid packaging local secrets, Git metadata, and transient files into Docker build contexts.
-- Added `CHANGELOG.md` and `RELEASE_NOTES.md` to keep repository history and release summaries easier to review.
-- Added a safer Docker image workflow mode where pull requests only validate builds and main-branch runs publish images.
+- 增加模块化 `autodl_helper/` 包，拆分认证、API、配置、锁、状态、通知和任务模块。
+- 增加多实例抢机支持，可独立执行每个任务并去重通知。
+- 增加 `run`、`list-instances`、`test-notify` 和 `validate-config` 等运维子命令。
+- 增加 JSON 和表格两种实例列表输出，以及通知冒烟测试。
+- 增加认证、抢机任务和通知后端的配置校验。
+- 增加 CLI 命令、通知隔离、多任务运行和抢机去重的测试覆盖。
 
-### Changed
+### 变更
 
-- Refreshed `README.md` to match the current single-file implementation and runtime behavior.
-- Updated Docker runtime setup to use `python:3.11-slim` and run the app directly with `python main.py`.
+- 文档和打包相关入口中的项目名从 `autodl-keeper` 改为 `autodl-helper`。
+- CLI 从扁平参数切换为子命令结构。
+- 示例配置改为展示真实的多任务抢机场景。
 
-### Fixed
+### 修复
 
-- Moved Playwright imports to runtime so `python main.py --help` works even when Playwright is not installed yet.
-- Installed Chromium during Docker image builds so Playwright-based login can work inside containers.
-- Removed the brittle shell-based `.env` export step from Docker startup.
-- Updated the GitHub Actions Docker workflow to current action versions and removed unsupported legacy image targets.
+- 通知器失败会被隔离，单个通知渠道异常不再阻塞其他渠道。
+- 守护进程运行时记录每个抢机任务的结果，便于排障。
+- Docker 运行入口与当前 CLI 对齐。
 
-### Security
+## 2026-04-03：维护与安全更新
 
-- Upgraded Python dependencies to current safe versions.
-- Pinned `urllib3==2.6.3` to enforce a non-vulnerable resolver outcome alongside `requests==2.33.1`.
+### 新增
+
+- 增加 `.dockerignore`，避免把本地密钥、Git 元数据和临时文件打进 Docker 构建上下文。
+- 增加变更日志，便于审查仓库历史和发布摘要。
+- 增加更安全的 Docker 镜像工作流：拉取请求只校验构建，主分支才发布镜像。
+
+### 变更
+
+- 刷新 `README.md`，使其匹配当时的单文件实现和运行行为。
+- Docker 运行环境改为 `python:3.11-slim`，并直接用 `python main.py` 运行应用。
+
+### 修复
+
+- Playwright 改为运行时导入，使 `python main.py --help` 在未安装 Playwright 时也能工作。
+- Docker 镜像构建时安装 Chromium，使容器内基于 Playwright 的登录可以工作。
+- 移除脆弱的 shell `.env` 导出步骤。
+- 更新 GitHub Actions Docker 工作流到当前 action 版本，并移除不支持的旧镜像目标。
+
+### 安全
+
+- 升级 Python 依赖到较新的安全版本。
+- 固定 `urllib3==2.6.3`，与 `requests==2.33.1` 一起避免解析到有漏洞的依赖版本。

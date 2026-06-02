@@ -1,20 +1,20 @@
-# Configuration
+# 配置说明
 
-This document explains the public configuration surface of `autodl-helper`.
+本文说明 `autodl-helper` 当前公开支持的 `config.yaml` 配置面。
 
-Default config file:
+默认配置文件：
 
 ```text
 config.yaml
 ```
 
-Public-safe example:
+可提交的示例配置：
 
 ```text
 config.example.yaml
 ```
 
-## Top-level structure
+## 顶层结构
 
 ```yaml
 storage:
@@ -24,57 +24,51 @@ notifications:
 tasks:
 ```
 
----
-
 ## `storage`
 
 ### `storage.database_file`
 
-Path to the local SQLite database.
+本地 SQLite 数据库路径。
 
-Example:
+示例：
 
 ```yaml
 storage:
   database_file: "data/autodl-helper.db"
 ```
 
-What it stores:
+当前数据库保存：
 
-- keeper history
-- scheduled-start history
-- runtime control state
-- daemon heartbeat
-- event logs
-
----
+- Keeper 历史
+- 抢机历史
+- 运行时暂停/恢复控制
+- 守护进程心跳
+- 事件日志
 
 ## `interactive`
 
 ### `interactive.max_workers`
 
-Controls the internal async worker pool used by the interactive terminal UI.
+终端 UI 内部异步任务池并发数。
 
-Example:
+示例：
 
 ```yaml
 interactive:
   max_workers: 6
 ```
 
-Notes:
+说明：
 
-- this is **not** the daemon process count
-- higher values can make the interactive UI more responsive
-- current default is `6`
-
----
+- 这不是守护进程数量。
+- 数值较高时，终端 UI 中部分异步操作会更灵敏。
+- 当前默认值是 `6`。
 
 ## `accounts`
 
-Each account entry defines one AutoDL account runtime profile.
+每个账户条目表示一个 AutoDL 账号运行配置。
 
-Example:
+示例：
 
 ```yaml
 accounts:
@@ -91,41 +85,37 @@ accounts:
     auth_failure_backoff_seconds: 0
 ```
 
-### Fields
+### 字段
 
 #### `name`
 
-Human-readable account key used across CLI commands and runtime state.
+账户名。CLI、UI、SQLite 运行状态都会用它识别账号。
 
 #### `enabled`
 
-Whether this account participates in daemon execution.
+是否参与守护进程执行和默认业务操作。
 
 #### `authorization`
 
-Bearer token for AutoDL API or web requests.
-
-Use this when you already have a usable token.
+AutoDL 接口或网页请求使用的 `Bearer` 令牌。已有可用令牌时优先使用它。
 
 #### `autodl_phone` / `autodl_password`
 
-Alternative login path when token-based auth is not used.
-
-Do not publish real values.
+没有令牌或需要重新登录时使用的手机号和密码。不要提交真实值。
 
 #### `cache_file`
 
-Path to the local auth cache for this account.
+当前账户的本地授权缓存文件路径。
 
 #### `cache_max_age_seconds`
 
-How long auth cache remains valid before refresh is required.
+授权缓存最长有效时间，超过后需要重新校验或刷新。
 
 #### `lightweight_mode`
 
-Auth/runtime refresh behavior.
+授权刷新策略。
 
-Supported values:
+支持值：
 
 - `off`
 - `normal`
@@ -133,21 +123,19 @@ Supported values:
 
 #### `runtime_auth_revalidate_seconds`
 
-Optional runtime token revalidation window.
+运行时令牌重新校验窗口。为 `0` 时使用默认策略。
 
 #### `force_refresh_min_interval_seconds`
 
-Minimum interval before Playwright/browser-based forced refresh is retried.
+Playwright/浏览器强制刷新令牌的最小重试间隔。
 
 #### `auth_failure_backoff_seconds`
 
-Backoff duration after auth failure before retrying again.
-
----
+鉴权失败后的退避时间，避免短时间内反复登录或请求。
 
 ## `notifications`
 
-Optional notification backends.
+可选通知渠道。
 
 ### `notifications.pushplus`
 
@@ -181,13 +169,11 @@ notifications:
       - "you@example.com"
 ```
 
----
-
 ## `tasks.keeper`
 
-Keeper prevents a target instance from reaching release by operating within a computed keeper window.
+Keeper 用于在实例释放前的保活窗口内接管实例，避免实例到期释放。
 
-Example:
+示例：
 
 ```yaml
 tasks:
@@ -203,51 +189,49 @@ tasks:
     fallback_to_status_at: true
 ```
 
-### Fields
+### 字段
 
 #### `enabled`
 
-Enable or disable keeper globally.
+是否启用 Keeper。
 
 #### `shutdown_release_after_hours`
 
-How long after shutdown an instance is considered near release.
+实例关机后预计多久会释放。这个值用于计算释放时间。
 
 #### `keeper_trigger_before_hours`
 
-How long before release keeper should start taking over.
+距离预计释放时间还有多久时开始进入 Keeper 接管窗口。看板中“几小时/几天内临期”的口径也来自这个值。
 
 #### `interval_minutes`
 
-Keeper polling interval for daemon execution.
+守护进程执行 Keeper 检查的间隔。
 
 #### `power_on_wait_seconds`
 
-Wait time after power-on action.
+执行开机动作后的等待时间。
 
 #### `power_off_wait_seconds`
 
-Wait time after power-off action.
+执行关机动作后的等待时间。
 
 #### `start_cooldown_minutes`
 
-Cooldown after a recent start.
+近期刚开机后的冷却时间，冷却期内避免重复动作。
 
 #### `stop_cooldown_minutes`
 
-Cooldown after a recent stop.
+近期刚关机后的冷却时间，冷却期内避免重复动作。
 
 #### `fallback_to_status_at`
 
-Whether to use `status_at` as a fallback time source when explicit shutdown/start timestamps are missing.
-
----
+当官方数据缺少明确开关机时间时，是否使用 `status_at` 作为兜底时间。
 
 ## `tasks.scheduled_start`
 
-scheduled-start handles instance grabbing / opening around a target time.
+`scheduled_start` 用于在目标时间前开始抢机或开机。
 
-Example:
+示例：
 
 ```yaml
 tasks:
@@ -255,83 +239,88 @@ tasks:
     enabled: true
     poll_interval_seconds: 5
     jobs:
-      - instance_id: "<your-instance-id>"
+      - enabled: true
+        instance_id: "<your-instance-id>"
         name: "daily-fixed-instance"
         target_time: "14:00"
         advance_hours: 2
+        schedule_mode: "daily"
+        weekdays: []
         timezone: "Asia/Shanghai"
 ```
 
 ### `enabled`
 
-Enable or disable all scheduled-start jobs globally.
+是否启用全部抢机任务。
 
 ### `poll_interval_seconds`
 
-How often the daemon checks scheduled-start jobs.
+守护进程检查抢机任务的间隔。
 
 ### `jobs`
 
-List of scheduled-start jobs.
+抢机任务列表。每个任务支持两类目标：
 
-Each job supports either:
+- 固定 `instance_id`
+- 按 `selector` 筛选候选机器
 
-- fixed `instance_id`
-- selector-based targeting
+### 任务字段
 
-### Job fields
+#### `enabled`
+
+是否启用这个任务。配置停用的任务不能通过运行时“恢复任务”重新启用，需要在配置管理里修改。
 
 #### `instance_id`
 
-Use this for a fixed instance target.
+固定实例 ID。适合只抢或开启指定实例。
 
 #### `name`
 
-Job display name and runtime identity.
-
-Recommended to keep unique per account.
+任务显示名和运行时身份。建议在同一账户下保持唯一。
 
 #### `target_time`
 
-Daily target time, format:
+目标时间，格式：
 
 ```text
 HH:MM
 ```
 
+终端 UI 会尽量简化输入，支持不输入冒号的常见时间写法。
+
 #### `advance_hours`
 
-How many hours before target time polling should begin.
+目标时间前多少小时开始进入抢机窗口。
 
 #### `schedule_mode`
 
-Supported values:
+执行频率。
 
-- `daily`
-- `once`
-- `weekly`
+支持值：
+
+- `daily`：每天
+- `once`：单次
+- `weekly`：每周
 
 #### `weekdays`
 
-Used only when `schedule_mode` is `weekly`.
+仅 `schedule_mode: "weekly"` 使用，按周序号：
 
-Values follow ISO weekdays:
-
-- `1` Monday
-- `2` Tuesday
-- `3` Wednesday
-- `4` Thursday
-- `5` Friday
-- `6` Saturday
-- `7` Sunday
+- `1`：周一
+- `2`：周二
+- `3`：周三
+- `4`：周四
+- `5`：周五
+- `6`：周六
+- `7`：周日
 
 #### `timezone`
 
-Time zone used to interpret `target_time`.
+解释 `target_time` 使用的时区。默认使用 `Asia/Shanghai`。
 
 ### `selector`
 
-Use selector when grabbing any matching candidate rather than one fixed instance.
+不指定固定实例时，可以用 `selector` 抢符合条件的候选机器。
 
 ```yaml
 selector:
@@ -343,7 +332,7 @@ selector:
     - "payg"
 ```
 
-Fields:
+支持字段：
 
 - `regions`
 - `gpu_model`
@@ -352,7 +341,7 @@ Fields:
 
 ### `priority`
 
-Optional preferred candidate order.
+可选的候选优先级。
 
 ```yaml
 priority:
@@ -360,19 +349,17 @@ priority:
     machine_alias: "<preferred-machine>"
 ```
 
-Supported fields:
+支持字段：
 
 - `instance_id`
 - `region`
 - `machine_alias`
 
----
+## 环境变量覆盖
 
-## Environment variables
+配置加载时支持部分环境变量覆盖。
 
-The project also supports selected environment overrides during config loading.
-
-Examples used in code:
+代码中使用的环境变量包括：
 
 - `Authorization`
 - `AUTODL_PHONE`
@@ -384,14 +371,12 @@ Examples used in code:
 - `AUTODL_POST_LOGIN_WAIT_SECONDS`
 - `AUTODL_AUTH_CACHE_MAX_AGE_SECONDS`
 
-For public/open-source usage, prefer storing real values in local `.env` and keeping committed config sanitized.
+公开仓库中建议只提交 `config.example.yaml` 和 `.env.template`，真实值放在本地 `.env` 或本地 `config.yaml`。
 
----
+## 公开仓库建议
 
-## Recommended public/open-source practice
-
-- commit `config.example.yaml`
-- keep `config.yaml` local only
-- never publish real tokens
-- never publish real phone/password credentials
-- treat instance IDs as potentially sensitive in screenshots and issue reports
+- 提交 `config.example.yaml`。
+- `config.yaml` 只保留在本地。
+- 不发布真实令牌。
+- 不发布真实手机号和密码。
+- 截图和反馈中把实例 ID 视为潜在敏感信息。

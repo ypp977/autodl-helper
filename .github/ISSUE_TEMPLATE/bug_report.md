@@ -1,60 +1,60 @@
 ---
-name: Bug report
-about: Report a reproducible bug in autodl-helper
+name: 缺陷报告
+about: 报告 autodl-helper 中可复现的问题
 title: "[bug] "
 labels: bug
 assignees: ""
 ---
 
-## Summary
+## 摘要
 
-Describe the problem clearly.
+请清楚描述问题。
 
-## Environment
+## 环境
 
-- OS:
-- Python version:
-- autodl-helper version:
-- Install method: source / editable install / other
+- 操作系统：
+- Python 版本：
+- autodl-helper 版本：
+- 安装方式：源码 / 可编辑安装 / 其他
 
-## Command
+## 命令
 
 ```bash
-# paste the exact command
+# 粘贴实际执行的命令
 ```
 
-## Config context
+## 配置上下文
 
-Do **not** paste real tokens, phone numbers, or private instance IDs.
+不要粘贴真实令牌、手机号或私有实例 ID。
 
-If relevant, paste a **sanitized** snippet from:
+如有必要，只粘贴已脱敏的配置片段：
 
 ```yaml
-# sanitized config snippet
+# 已脱敏的配置片段
 ```
 
-## What happened
+## 实际行为
 
-Describe the actual behavior.
+请描述实际发生了什么。
 
-## What you expected
+## 预期行为
 
-Describe the expected behavior.
+请描述你期望它怎么工作。
 
-## Logs / traceback
+## 日志或回溯
 
-Paste sanitized logs or traceback:
+请粘贴已脱敏的日志或回溯：
 
 ```text
-# sanitized logs
+# 已脱敏的日志
 ```
 
-## Reproduction steps
+## 复现步骤
 
 1.
 2.
 3.
 
-## Additional context
+## 其他信息
 
-Anything else that helps reproduce or debug the issue.
+补充任何有助于复现或排查的信息。

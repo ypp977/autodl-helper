@@ -1,83 +1,67 @@
-# Tasks: resource, UI, and cross-platform refactor
+# 任务：资源、UI 与跨平台重构
 
-## Phase 0 Tasks
+## 阶段 0 任务
 
-- [x] Decide how to handle current uncommitted UI changes.
-  Current UI precheck/menu changes are explicitly carried forward in the working tree.
-- [x] Run baseline full test suite.
-  Baseline on 2026-05-25: `PYTHONPATH=. /Users/yangpengpeng/miniconda3/envs/autodl-helper/bin/python -m pytest -q` -> 234 passed.
-- [x] Run architecture tests.
-  Baseline on 2026-05-25: architecture, layering, and service backend tests -> 24 passed.
-- [x] Record current largest modules and risk areas.
-  Largest modules remain CLI app, UI scheduled config/action/app, scheduled-start, Keeper, runtime, storage, and auth.
-- [x] Identify daemon/UI paths that instantiate clients or hit APIs.
-  Dashboard live Keeper rows were identified as a passive client creation path and replaced with local history reads.
+- [x] 决定如何处理当前未提交 UI 改动。
+  当前 UI 预检和菜单改动已经纳入工作树并提交。
+- [x] 运行基线全量测试。
+  2026-05-25 基线：`PYTHONPATH=. /Users/yangpengpeng/miniconda3/envs/autodl-helper/bin/python -m pytest -q`，234 个测试通过。
+- [x] 梳理主要大模块和热点路径。
+  热点包括 CLI app、UI 配置/动作/看板、抢机、Keeper、运行时、存储和授权。
+- [x] 识别守护进程/UI 中会创建客户端或访问接口的路径。
+  看板被动 Keeper 实时探测已替换为本地 SQLite 历史读取。
 
-## Phase 1 Tasks: UI
+## 阶段 1 任务：UI
 
-- [x] Ensure daemon submenu uses page redraw and notice feedback.
-  Verified after menu split on 2026-05-25: UI/architecture focused tests 44 passed.
-- [x] Ensure Keeper submenu uses page redraw and notice feedback.
-  Verified after menu split on 2026-05-25: UI/architecture focused tests 44 passed.
-- [x] Ensure account/config/scheduled flows use consistent return semantics.
-  Config save uses saved/reload wording; scheduled job edits and top-level scheduled changes use draft wording until save.
-- [x] Add Keeper details view for per-instance due/skip/failure reasons.
-  First version uses SQLite keeper history and does not perform live API probes.
-- [x] Add concise failure detail drill-down from summaries.
-  Keeper failed run summaries point users to the history-backed Keeper details page.
-- [x] Keep UI action code independent from CLI app entrypoint.
-  `action_menus.py` is now a compatibility facade; daemon, Keeper, and account actions live in ownership-specific UI modules.
+- [x] 让守护进程子菜单使用页面式重绘和提示反馈。
+- [x] 让 Keeper 子菜单使用页面式重绘和提示反馈。
+- [x] 让账户子菜单使用页面式重绘和提示反馈。
+- [x] 增加 Keeper 执行详情页，展示单实例临期、跳过和失败原因。
+- [x] Keeper 失败摘要保持简洁，并提示查看 Keeper 详情。
+- [x] UI 动作代码按职责拆分。
+  `action_menus.py` 现在是兼容门面；守护进程、Keeper、账户动作在各自 UI 模块中。
+- [x] 后台刷新完成后自动重绘主看板。
+- [x] Keeper 立即执行完成后自动重绘 Keeper 页面。
+- [x] 账户健康检查完成后自动重绘账户页面。
 
-## Phase 2 Tasks: Resource Usage
+## 阶段 2 任务：资源占用
 
-- [x] Add tests proving passive dashboard render does not build clients for password-only accounts.
-- [x] Add tests proving disabled Keeper does not build clients.
-- [x] Add tests proving paused Keeper does not run task logic.
-- [x] Add tests proving scheduled-start does not poll when disabled or no due jobs exist.
-  Covered disabled scheduled-start and daemon dispatch interval gating.
-- [x] Reduce UI dashboard live API calls or make them explicit/cached.
-  Keeper dashboard now reads SQLite history only; explicit API work remains in Keeper execution and account health checks.
-- [x] Audit auth refresh paths so browser login is never triggered by passive dashboard render.
-  Passive dashboard rendering no longer creates AutoDL clients for token or password-only accounts.
+- [x] 增加测试证明仅密码账户的被动看板渲染不会创建客户端。
+- [x] 增加测试证明停用 Keeper 不会创建客户端。
+- [x] 增加测试证明暂停 Keeper 不会执行任务逻辑。
+- [x] 增加测试覆盖停用抢机和守护进程调度间隔门禁。
+- [x] 降低 UI 看板实时接口调用。
+  Keeper 看板现在只读 SQLite 历史；显式接口操作保留在 Keeper 执行和账户健康检查。
+- [x] 审计授权刷新路径，确保被动看板不触发浏览器登录。
 
-## Phase 3 Tasks: Task Boundaries
+## 阶段 3 任务：业务边界
 
-- [x] Review Keeper task modules for remaining UI/CLI concerns.
-  Keeper result/reason labels now live with Keeper task result helpers; UI/CLI consume the shared helpers.
-- [x] Review scheduled-start module for extraction candidates.
-  Scheduled-start result, reason, and candidate labels were extracted from CLI/task-local dictionaries into task-level helpers.
-- [x] Normalize task failure labels/categories where output still differs.
-  Keeper and scheduled-start labels have shared task-level entrypoints with focused coverage in `tests/tasks/test_result_labels.py`.
-- [x] Keep result models stable for history and UI.
-  No result dataclass or SQLite schema changes were needed; label normalization is presentation-only.
+- [x] 审查 Keeper 任务模块中剩余的 UI/CLI 关注点。
+  Keeper 结果/原因标签已移动到 Keeper 任务结果辅助函数。
+- [x] 审查抢机输出和失败类别。
+  Keeper 和抢机结果标签都有任务级入口，并由 `tests/tasks/test_result_labels.py` 覆盖。
+- [x] 保持历史和 UI 使用的结果模型稳定。
 
-## Phase 4 Tasks: Cross-Platform
+## 阶段 4 任务：跨平台
 
-- [x] Verify service manager chooses the correct backend by platform.
-  Covered by `tests/services/test_service_manager.py` for macOS, Linux, and Windows platform branches.
-- [x] Keep launchd/systemd/Windows Task Scheduler tests green.
-  Latest focused platform run includes service manager, launchd, systemd, and Windows Task Scheduler tests.
-- [x] Review path handling for config-relative state, lock, data, and log files.
-  Existing config-relative database/cache/lock/state/log behavior is covered by config, CLI launch, and service backend tests.
-- [x] Avoid POSIX-only commands in Python runtime paths.
-  PID existence checks and detached subprocess launch now use small platform-specific helpers outside service backends.
+- [x] 验证服务管理器按平台选择正确后端。
+  `tests/services/test_service_manager.py` 覆盖 macOS、Linux、Windows 分支。
+- [x] 验证 launchd、systemd 和 Windows Task Scheduler 后端测试。
+- [x] 确认运行时路径仍以配置目录为基础。
+- [x] 避免服务模块外出现 POSIX-only 假设。
+  PID 检查和后台子进程启动集中在小型平台分支辅助函数中。
 
-## Phase 5 Tasks: Docs
+## 阶段 5 任务：文档
 
-- [x] Update troubleshooting for Keeper precheck and resource usage.
-  Troubleshooting now documents passive SQLite-backed Keeper dashboard behavior and current grouped commands.
-- [x] Update command docs only if user-facing commands change.
-  README/COMMANDS install and command references were compressed and aligned with current public commands.
-- [x] Update architecture notes after module boundaries change.
-  Architecture/development notes document UI action module ownership and task-level result label helpers.
+- [x] 更新安装、命令和 UI 行为文档。
+- [x] 更新 Keeper 预检、资源占用和账户健康检查排障说明。
+- [x] 更新架构瘦身文档和开发说明。
+- [x] 文档中文化并校准到当前实现。
 
-## Always-On Tasks
+## 完成审计
 
-- [x] Preserve user changes.
-  Existing dirty worktree was carried forward; no unrelated file was reverted.
-- [x] Use small commits by phase.
-  Changes are organized by phase in the working tree; no commit was created because this session did not receive an explicit commit request.
-- [x] Run focused tests before full tests.
-  Latest focused run on 2026-05-25: CLI, UI config, and docs-adjacent checks -> 92 passed.
-- [x] Do not mark the full refactor complete until every spec requirement is verified.
-  Completion audit was performed after focused tests, architecture/service tests, docs updates, and full test suite passed.
+- [x] CLI 分组命令文档已更新。
+- [x] UI 配置、保存和重载行为已覆盖测试。
+- [x] 后台任务完成重绘已覆盖主看板、Keeper 页面和账户页面。
+- [x] 全量测试最新记录：297 个测试通过。
+- [x] `ruff check .` 通过。

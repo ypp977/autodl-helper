@@ -1,6 +1,6 @@
-# Commands
+# 命令说明
 
-Public entrypoints:
+公开入口：
 
 ```bash
 autodl-helper <command> [options]
@@ -8,14 +8,15 @@ python main.py <command> [options]
 python -m autodl_helper <command> [options]
 ```
 
-Examples use `autodl-helper`; replace it with `python main.py` when running from source.
+示例统一使用 `autodl-helper`。从源码运行时，把它替换成 `python main.py`。
 
-## Quick reference
+## 快速参考
 
 ```bash
 autodl-helper init
 autodl-helper login --config config.yaml --account main
 autodl-helper login --config config.yaml --all
+autodl-helper accounts --config config.yaml
 autodl-helper list --config config.yaml
 autodl-helper list --config config.yaml --json
 autodl-helper run daemon --config config.yaml
@@ -30,18 +31,18 @@ autodl-helper config show --config config.yaml
 autodl-helper config validate --config config.yaml --json
 ```
 
-## Runtime options
+## 运行时选项
 
-Common options:
+通用选项：
 
 - `--config`
 - `--account`
 - `--headed`
 - `--state-file` / `--lock-file`
 
-Task-specific overrides stay on their owning command, for example Keeper timing options on `run keeper` and scheduled-start timing options on `run scheduled`.
+任务专属覆盖参数放在对应命令下，例如 Keeper 时间参数在 `run keeper`，抢机时间参数在 `run scheduled`。
 
-## Service
+## 后台服务
 
 ```bash
 autodl-helper service install --config config.yaml
@@ -52,9 +53,9 @@ autodl-helper service stop --config config.yaml
 autodl-helper service uninstall --config config.yaml
 ```
 
-Backend is selected by platform: macOS LaunchAgent, Linux systemd user service, Windows Task Scheduler.
+后台托管方式按平台自动选择：macOS 使用 LaunchAgent，Linux 使用 systemd 用户服务，Windows 使用 Task Scheduler。
 
-## Diagnostics
+## 诊断
 
 ```bash
 autodl-helper debug health --config config.yaml
@@ -69,7 +70,7 @@ autodl-helper debug history --config config.yaml --limit 50
 autodl-helper debug history --config config.yaml --task keeper
 ```
 
-## Config
+## 配置
 
 ```bash
 autodl-helper config show --config config.yaml
@@ -78,43 +79,49 @@ autodl-helper config validate --config config.yaml
 autodl-helper config validate --config config.yaml --json
 ```
 
-Interactive config editing is available from `autodl-helper ui --config config.yaml`.
+交互式配置编辑入口是 `autodl-helper ui --config config.yaml`。
 
-## Terminal UI layout
+## 终端 UI 布局
 
 `autodl-helper ui` 的主菜单按职责分层：
 
 - `1` 刷新状态。
 - `2` 业务操作：Keeper 管理、抢机管理。
 - `3` 设置管理：账户管理、配置管理。
-- `4` daemon 管理。
+- `4` 守护进程管理。
 - `0` 退出。
 
 业务操作页只写运行时控制状态，不直接改 `config.yaml`；完整配置仍从“配置管理”进入。
 
-## JSON output contract
+刷新类操作保持非阻塞：
 
-Commands that expose `--json` keep their successful data output stable. Status-style commands such as
-`config validate --json`, `debug db --json`, and `debug health --json` return:
+- 主菜单“刷新状态”会提交后台刷新任务，状态栏先显示“刷新中”，任务完成后自动重绘看板。
+- Keeper 管理里的“立即执行”和账户管理里的“账户健康检查”同样后台执行，完成后会在当前页面自动回显结果。
+- 被动看板渲染只读本地 SQLite 历史；实时 AutoDL 接口请求只发生在显式操作中。
+
+## JSON 输出契约
+
+带 `--json` 的命令会保持成功输出结构稳定。状态类命令，例如
+`config validate --json`、`debug db --json` 和 `debug health --json`，返回：
 
 ```json
 {"ok": true, "data": {"status": "valid"}}
 ```
 
-When a `--json` command fails, stderr uses a stable envelope and redacts sensitive fields:
+当 `--json` 命令失败时，标准错误使用稳定错误结构，并对敏感字段脱敏：
 
 ```json
-{"ok": false, "error": {"code": "config_invalid", "message": "Configuration invalid.", "details": {"errors": []}}}
+{"ok": false, "error": {"code": "config_invalid", "message": "配置无效。", "details": {"errors": []}}}
 ```
 
-`debug auth --apply-suggested-patch` is disabled because runtime event data must not directly edit source files.
-Use `debug auth --suggest-patch` and apply reviewed changes manually.
+`debug auth --apply-suggested-patch` 已禁用，因为运行时事件数据不能直接修改源码。
+需要建议内容时使用 `debug auth --suggest-patch`，再人工审查后应用。
 
-## Old aliases
+## 旧别名
 
-Use grouped commands instead of removed flat aliases:
+已移除的扁平命令请改用分组命令：
 
-| Old command | New command |
+| 旧命令 | 新命令 |
 | --- | --- |
 | `run-all` / `run-daemon` | `run daemon` |
 | `run-keeper` / `keep` | `run keeper` |
