@@ -122,7 +122,22 @@ jobs:
 
       - name: Collect keeper probe tests
         run: |
-          pytest --import-mode=importlib --collect-only -q tests/tasks/test_keeper_probe.py
+          set +e
+          pytest --import-mode=importlib --collect-only -q tests/tasks/test_keeper_probe.py > /tmp/keeper-probe-collect.log 2>&1
+          status=$?
+          set -e
+          if [ "$status" -ne 0 ]; then
+            message=$(python - <<'PY'
+from pathlib import Path
+text = Path('/tmp/keeper-probe-collect.log').read_text(encoding='utf-8', errors='replace')
+text = text.replace('%', '%25').replace('\r', '%0D').replace('\n', '%0A')
+print(text[:7000])
+PY
+)
+            echo "::error title=Keeper probe collection failed::$message"
+            exit "$status"
+          fi
+          cat /tmp/keeper-probe-collect.log
 
       - name: Run keeper probe tests
         run: |
