@@ -116,6 +116,14 @@ jobs:
         run: |
           pytest -q tests/tasks/test_keeper.py
 
+      - name: Smoke keeper probe import
+        run: |
+          python -c "from scripts.keeper_probe import format_probe_line; print(format_probe_line.__name__)"
+
+      - name: Collect keeper probe tests
+        run: |
+          pytest --collect-only -q tests/tasks/test_keeper_probe.py
+
       - name: Run keeper probe tests
         run: |
           pytest -q tests/tasks/test_keeper_probe.py
