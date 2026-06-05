@@ -77,6 +77,13 @@ autodl-helper config validate --config config.yaml
 
 完整命令只维护在 `docs/COMMANDS.md`。
 
+## 配置填写提示
+
+- Keeper 主要看两个时间：关机后最长保留多久、释放前多久开始保活。
+- 抢机目标时间在 UI 中可输入 `9`、`930`、`09:30`、`1430`。
+- 抢机提前时间在 UI 中可输入 `90m`、`1.5h`、`2h`。
+- 单次抢机会要求填写执行日期，格式是 `YYYY-MM-DD`。
+
 ## Docker 守护进程
 
 Docker 只负责运行守护进程，不支持 UI、不发布端口。

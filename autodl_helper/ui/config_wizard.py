@@ -42,8 +42,8 @@ __all__ = [
 ]
 
 _KEEPER_CORE_FIELDS: tuple[tuple[str, str, str], ...] = (
-    ('keeper_trigger_before_hours', '到期前触发保活(小时)', 'int_zero'),
-    ('shutdown_release_after_hours', '释放窗口(小时)', 'int_positive'),
+    ('keeper_trigger_before_hours', '释放前多久开始保活(小时)', 'int_zero'),
+    ('shutdown_release_after_hours', '关机后最长保留时间(小时)', 'int_positive'),
 )
 
 _KEEPER_ADVANCED_FIELDS: tuple[tuple[str, str, str], ...] = (
@@ -100,13 +100,13 @@ def validate_keeper_payload(keeper: dict[str, Any]) -> list[str]:
     shutdown_release_after_hours = _payload_int(
         keeper,
         'shutdown_release_after_hours',
-        label='释放窗口(小时)',
+        label='关机后最长保留时间(小时)',
         errors=errors,
     )
     keeper_trigger_before_hours = _payload_int(
         keeper,
         'keeper_trigger_before_hours',
-        label='到期前触发保活(小时)',
+        label='释放前多久开始保活(小时)',
         errors=errors,
     )
     interval_minutes = _payload_int(keeper, 'interval_minutes', label='检查间隔(分钟)', errors=errors)

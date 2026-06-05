@@ -104,7 +104,7 @@ class ControlStoreMixin:
         *,
         enabled: bool,
         target_time_override: str = '',
-        advance_hours_override: int | None = None,
+        advance_hours_override: float | None = None,
         source: str,
     ) -> None:
         self.init_schema()

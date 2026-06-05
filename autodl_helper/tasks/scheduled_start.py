@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 import re
 from dataclasses import dataclass, field
-from datetime import datetime, time, timedelta
+from datetime import date, datetime, time, timedelta
 from zoneinfo import ZoneInfo
 
 from autodl_helper.core.config import ScheduledStartPriority, ScheduledStartSelector
@@ -21,15 +21,18 @@ class ScheduledStartJobRuntime:
     job_name: str
     instance_id: str = ""
     target_time: str = "14:00"
-    advance_hours: int = 2
+    advance_hours: float = 2
     schedule_mode: str = "daily"
     weekdays: list[int] = field(default_factory=list)
+    run_date: str = ""
     timezone: str = "Asia/Shanghai"
     poll_interval_seconds: int = 300
     selector: ScheduledStartSelector | None = None
     priority: list[ScheduledStartPriority] = field(default_factory=list)
 
     def window_key(self, now: datetime) -> str:
+        if self.schedule_mode == 'once' and self.run_date:
+            return self.run_date
         if self.schedule_mode == 'weekly':
             iso = now.isocalendar()
             return f'{iso.year}-W{iso.week:02d}-{now.isoweekday()}'
@@ -38,9 +41,14 @@ class ScheduledStartJobRuntime:
     def target_datetime(self, now: datetime) -> datetime:
         tz = ZoneInfo(self.timezone)
         hh, mm = map(int, self.target_time.split(':'))
-        return datetime.combine(now.date(), time(hh, mm), tzinfo=tz)
+        target_date = now.date()
+        if self.schedule_mode == 'once' and self.run_date:
+            target_date = date.fromisoformat(self.run_date)
+        return datetime.combine(target_date, time(hh, mm), tzinfo=tz)
 
     def scheduled_today(self, now: datetime) -> bool:
+        if self.schedule_mode == 'once' and self.run_date:
+            return now.date().isoformat() == self.run_date
         if self.schedule_mode != 'weekly':
             return True
         if not self.weekdays:

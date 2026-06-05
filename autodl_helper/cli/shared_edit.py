@@ -36,6 +36,11 @@ def _prompt_optional_int(prompt: str) -> int | None:
     return int(value) if value else None
 
 
+def _prompt_optional_float(prompt: str) -> float | None:
+    value = input(prompt).strip()
+    return float(value) if value else None
+
+
 def _prompt_optional_bool(prompt: str) -> bool | None:
     value = input(prompt).strip().lower()
     if not value:
@@ -62,7 +67,7 @@ def collect_config_edit_args(args: argparse.Namespace) -> argparse.Namespace:
     args.scheduled_poll_interval = _prompt_optional_int('scheduled_poll_interval (blank=skip): ')
     args.scheduled_job = _prompt_optional_text('scheduled_job name/instance_id (blank=skip): ')
     args.target_time = _prompt_optional_text('target_time (HH:MM, blank=skip): ')
-    args.advance_hours = _prompt_optional_int('advance_hours (blank=skip): ')
+    args.advance_hours = _prompt_optional_float('advance_hours (blank=skip): ')
     return args
 
 

@@ -12,7 +12,7 @@ def _scheduled_start_reason_label(reason: str) -> str:
     return scheduled_reason_label(reason)
 
 
-def _format_scheduled_window(*, target_time: str, advance_hours: int, now: datetime) -> str:
+def _format_scheduled_window(*, target_time: str, advance_hours: float, now: datetime) -> str:
     try:
         hh, mm = map(int, target_time.split(':'))
         target_dt = now.replace(hour=hh, minute=mm, second=0, microsecond=0)
@@ -63,7 +63,7 @@ def _log_scheduled_start_summary(
     account_name: str,
     job_name: str,
     target_time: str,
-    advance_hours: int,
+    advance_hours: float,
     schedule_mode: str,
     weekdays: list[int] | None = None,
     poll_interval_seconds: int,

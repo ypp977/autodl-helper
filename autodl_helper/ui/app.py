@@ -360,6 +360,7 @@ def _job_runtime(job: Any, poll_interval_seconds: int) -> ScheduledStartJobRunti
         advance_hours=job.advance_hours,
         schedule_mode=str(getattr(job, 'schedule_mode', 'daily') or 'daily'),
         weekdays=list(getattr(job, 'weekdays', []) or []),
+        run_date=str(getattr(job, 'run_date', '') or ''),
         timezone=getattr(job, 'timezone', 'Asia/Shanghai') or 'Asia/Shanghai',
         poll_interval_seconds=poll_interval_seconds,
         selector=job.selector,
@@ -372,13 +373,15 @@ def _job_window(runtime: ScheduledStartJobRuntime, now: datetime) -> tuple[datet
     local_now = now.astimezone(tz)
     if not runtime.scheduled_today(local_now):
         days_ahead = 1
-        while days_ahead <= 7:
+        max_days = 370 if runtime.schedule_mode == 'once' and runtime.run_date else 7
+        while days_ahead <= max_days:
             candidate = local_now + timedelta(days=days_ahead)
             if runtime.scheduled_today(candidate):
                 local_now = candidate
                 break
+            days_ahead += 1
     target = runtime.target_datetime(local_now)
-    if local_now > target:
+    if local_now > target and not (runtime.schedule_mode == 'once' and runtime.run_date):
         target = target + timedelta(days=1)
     start = target - timedelta(hours=runtime.advance_hours)
     if local_now < start:

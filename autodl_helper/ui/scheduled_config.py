@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import copy
 import re
+from datetime import date
 from typing import Any, Callable
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
@@ -11,6 +12,8 @@ InputFn = Callable[[str], str]
 
 _TIME_RE = re.compile(r'^(?:[01]\d|2[0-3]):[0-5]\d$')
 _TIME_COMPACT_RE = re.compile(r'^\d{1,4}$')
+_DATE_RE = re.compile(r'^\d{4}-\d{2}-\d{2}$')
+_DURATION_RE = re.compile(r'^(?P<number>\d+(?:\.\d+)?)(?P<unit>m|min|分钟|h|小时)?$')
 _BOOL_TRUE = {'y', 'yes', 'true', '1', 'on', '启用', '是'}
 _BOOL_FALSE = {'n', 'no', 'false', '0', 'off', '停用', '否'}
 _WEEKDAY_LABELS = {
@@ -78,6 +81,30 @@ def _parse_int(raw: str, *, minimum: int, field: str) -> int:
     return value
 
 
+def _parse_duration_hours(raw: str, *, minimum: float, field: str) -> float:
+    value = raw.strip().lower()
+    match = _DURATION_RE.match(value)
+    if not match:
+        raise ValueError(f'{field} 支持 90m、1.5h、2h 或 2')
+    number = float(match.group('number'))
+    unit = match.group('unit') or 'h'
+    hours = number / 60 if unit in {'m', 'min', '分钟'} else number
+    if hours < minimum:
+        raise ValueError(f'{field} 不能小于 {minimum:g} 小时')
+    return int(hours) if hours.is_integer() else hours
+
+
+def _parse_date(raw: str, *, field: str) -> str:
+    value = raw.strip()
+    if not _DATE_RE.match(value):
+        raise ValueError(f'{field} 必须是 YYYY-MM-DD，例如 2026-05-20')
+    try:
+        date.fromisoformat(value)
+    except ValueError as exc:
+        raise ValueError(f'{field} 不是有效日期') from exc
+    return value
+
+
 def validate_job_payload(job: dict[str, Any]) -> list[str]:
     errors: list[str] = []
     label = str(job.get('name') or job.get('instance_id') or '未命名任务')
@@ -91,6 +118,13 @@ def validate_job_payload(job: dict[str, Any]) -> list[str]:
     schedule_mode = str(job.get('schedule_mode') or 'daily')
     if schedule_mode not in {'once', 'daily', 'weekly'}:
         errors.append(f'{label}: schedule_mode 必须是 once/daily/weekly')
+    if schedule_mode == 'once':
+        run_date = str(job.get('run_date') or '').strip()
+        if run_date:
+            try:
+                _parse_date(run_date, field='run_date')
+            except ValueError as exc:
+                errors.append(f'{label}: {exc}')
     if schedule_mode == 'weekly':
         weekdays = job.get('weekdays') or []
         if not isinstance(weekdays, list) or not weekdays:
@@ -106,11 +140,11 @@ def validate_job_payload(job: dict[str, Any]) -> list[str]:
                     errors.append(f'{label}: weekdays 必须是 1-7 的数字')
                     break
     try:
-        advance = int(job.get('advance_hours', 0))
+        advance = float(job.get('advance_hours', 0))
         if advance <= 0:
             errors.append(f'{label}: advance_hours 必须大于 0')
     except (TypeError, ValueError):
-        errors.append(f'{label}: advance_hours 必须是整数')
+        errors.append(f'{label}: advance_hours 必须是数字')
     timezone = str(job.get('timezone') or 'Asia/Shanghai')
     try:
         ZoneInfo(timezone)
@@ -148,7 +182,7 @@ def list_job_summaries(payload: dict[str, Any]) -> list[str]:
         else:
             selector = job.get('selector') or {}
             detail = f"筛选 {color(selector.get('gpu_model', '-'), YELLOW)} x{color(selector.get('gpu_count', '-'), YELLOW)}"
-        lines.append(f'{index:>2}. [{enabled}] {name} | {schedule} | {target} | 提前 {advance}h | {detail}')
+        lines.append(f'{index:>2}. [{enabled}] {name} | {schedule} | {target} | 提前 {_format_hours(advance)} | {detail}')
     return lines
 
 
@@ -225,6 +259,15 @@ def _prompt_int(input_fn: InputFn, text: str, default: int, *, minimum: int) -> 
             print(str(exc))
 
 
+def _prompt_duration_hours(input_fn: InputFn, text: str, default: float, *, minimum: float) -> float:
+    while True:
+        raw = _prompt(input_fn, text, _format_hours(default))
+        try:
+            return _parse_duration_hours(raw, minimum=minimum, field=text)
+        except ValueError as exc:
+            print(str(exc))
+
+
 def _prompt_time(input_fn: InputFn, text: str, default: str) -> str:
     while True:
         value = _prompt(input_fn, text, default)
@@ -252,6 +295,19 @@ def _normalize_time(value: str) -> str | None:
     return None
 
 
+def _format_hours(value: object) -> str:
+    try:
+        hours = float(value)
+    except (TypeError, ValueError):
+        return str(value or '-')
+    if hours.is_integer():
+        return f'{int(hours)}h'
+    minutes = round(hours * 60)
+    if abs(hours * 60 - minutes) < 0.0001:
+        return f'{minutes}m'
+    return f'{hours:g}h'
+
+
 def _format_schedule(job: dict[str, Any]) -> str:
     mode = str(job.get('schedule_mode') or 'daily')
     label = _SCHEDULE_LABELS.get(mode, mode)
@@ -259,6 +315,9 @@ def _format_schedule(job: dict[str, Any]) -> str:
         weekdays = [int(day) for day in (job.get('weekdays') or [])]
         days = ','.join(_WEEKDAY_LABELS.get(day, str(day)) for day in sorted(set(weekdays)))
         return f'{label} {days or "-"}'
+    if mode == 'once':
+        run_date = str(job.get('run_date') or '').strip()
+        return f'{label} {run_date}' if run_date else label
     return label
 
 
@@ -268,34 +327,62 @@ def _prompt_schedule(input_fn: InputFn, job: dict[str, Any]) -> dict[str, Any]:
     while True:
         choice = _prompt(input_fn, '频率 1=单次 2=每天 3=每周', default).lower()
         if choice in {'1', 'once', '单次'}:
-            return {'schedule_mode': 'once', 'weekdays': []}
+            run_date = _prompt_date(input_fn, '执行日期 YYYY-MM-DD', str(job.get('run_date') or date.today().isoformat()))
+            return {'schedule_mode': 'once', 'weekdays': [], 'run_date': run_date}
         if choice in {'2', 'daily', '每天'}:
-            return {'schedule_mode': 'daily', 'weekdays': []}
+            return {'schedule_mode': 'daily', 'weekdays': [], 'run_date': ''}
         if choice in {'3', 'weekly', '每周'}:
             weekdays = _prompt_weekdays(input_fn, job.get('weekdays') or [])
-            return {'schedule_mode': 'weekly', 'weekdays': weekdays}
+            return {'schedule_mode': 'weekly', 'weekdays': weekdays, 'run_date': ''}
         print('频率只能输入 1/2/3')
+
+
+def _prompt_date(input_fn: InputFn, text: str, default: str) -> str:
+    while True:
+        raw = _prompt(input_fn, text, default)
+        try:
+            return _parse_date(raw, field=text)
+        except ValueError as exc:
+            print(str(exc))
+
+
+def _parse_weekdays(raw: str) -> list[int] | None:
+    value = raw.strip().lower().replace('，', ',').replace('、', ',')
+    if value in {'工作日', 'weekday', 'weekdays'}:
+        return [1, 2, 3, 4, 5]
+    if value in {'周末', 'weekend'}:
+        return [6, 7]
+    value = (
+        value.replace('星期', '周')
+        .replace('礼拜', '周')
+        .replace('周天', '周日')
+        .replace('周', '')
+    )
+    chinese_days = {'一': '1', '二': '2', '三': '3', '四': '4', '五': '5', '六': '6', '日': '7', '天': '7'}
+    for label, number in chinese_days.items():
+        value = value.replace(label, number)
+    if re.fullmatch(r'[1-7]+', value):
+        return sorted({int(char) for char in value})
+    parts = [item for item in re.split(r'[\s,]+', value) if item]
+    days: list[int] = []
+    for item in parts:
+        if not item.isdigit():
+            return None
+        day = int(item)
+        if day < 1 or day > 7:
+            return None
+        days.append(day)
+    return sorted(set(days)) if days else None
 
 
 def _prompt_weekdays(input_fn: InputFn, default: list[int]) -> list[int]:
     default_text = ','.join(str(day) for day in default) if default else '1'
     while True:
-        raw = _prompt(input_fn, '每周几，1=周一 ... 7=周日，逗号分隔', default_text)
-        days: list[int] = []
-        ok = True
-        for item in parse_csv(raw):
-            try:
-                day = int(item)
-            except ValueError:
-                ok = False
-                break
-            if day < 1 or day > 7:
-                ok = False
-                break
-            days.append(day)
-        if ok and days:
-            return sorted(set(days))
-        print('请输入 1-7 的数字，例如 1 或 1,3,5')
+        raw = _prompt(input_fn, '每周几，支持 135、1,3,5、周一三五、工作日、周末', default_text)
+        days = _parse_weekdays(raw)
+        if days:
+            return days
+        print('请输入 1-7、135、1,3,5、周一三五、工作日或周末')
 
 
 def _prompt_job(input_fn: InputFn) -> dict[str, Any]:
@@ -307,8 +394,8 @@ def _prompt_job(input_fn: InputFn) -> dict[str, Any]:
             raise ValueError('已取消新增任务')
         print('任务类型只能输入 1 或 2')
     name = _prompt(input_fn, '任务名')
-    target_time = _prompt_time(input_fn, '目标时间', '20:00')
-    advance_hours = _prompt_int(input_fn, '提前小时', 1, minimum=1)
+    target_time = _prompt_time(input_fn, '目标时间，支持 9、930、09:30、1430', '20:00')
+    advance_hours = _prompt_duration_hours(input_fn, '提前多久开始抢，支持 90m、1.5h、2h', 1, minimum=1 / 60)
     job: dict[str, Any] = {
         'name': name,
         'enabled': True,
@@ -363,7 +450,7 @@ def _job_detail_lines(job: dict[str, Any]) -> list[str]:
         f"  状态: {color('启用', GREEN) if job.get('enabled', True) else color('停用', RED)}",
         f"  频率: {color(_format_schedule(job), BLUE if job.get('schedule_mode') == 'weekly' else GREEN)}",
         f"  目标时间: {color(job.get('target_time') or '-', YELLOW)}",
-        f"  提前小时: {color(str(job.get('advance_hours') or '-'), YELLOW)}",
+        f"  提前多久: {color(_format_hours(job.get('advance_hours') or '-'), YELLOW)}",
     ]
     if job.get('selector'):
         selector = job.get('selector') or {}
@@ -388,9 +475,9 @@ def _edit_fixed_job_field(payload: dict[str, Any], index: int, choice: str, inpu
     elif choice == '2':
         update_scheduled_job(payload, index, _prompt_schedule(input_fn, job))
     elif choice == '3':
-        update_scheduled_job(payload, index, {'target_time': _prompt_time(input_fn, '新的目标时间', str(job.get('target_time') or '20:00'))})
+        update_scheduled_job(payload, index, {'target_time': _prompt_time(input_fn, '新的目标时间，支持 9、930、09:30、1430', str(job.get('target_time') or '20:00'))})
     elif choice == '4':
-        update_scheduled_job(payload, index, {'advance_hours': _prompt_int(input_fn, '新的提前小时', int(job.get('advance_hours') or 1), minimum=1)})
+        update_scheduled_job(payload, index, {'advance_hours': _prompt_duration_hours(input_fn, '新的提前多久，支持 90m、1.5h、2h', float(job.get('advance_hours') or 1), minimum=1 / 60)})
     elif choice == '5':
         update_scheduled_job(payload, index, {'instance_id': _prompt(input_fn, '新的实例 ID', str(job.get('instance_id') or ''))})
     elif choice == '6':
@@ -447,7 +534,7 @@ def _edit_job(payload: dict[str, Any], input_fn: InputFn, *, clear_screen_enable
                 ('1', '修改任务名'),
                 ('2', '修改频率'),
                 ('3', '修改目标时间'),
-                ('4', '修改提前小时'),
+                ('4', '修改提前多久'),
                 ('5', '修改 GPU 型号'),
                 ('6', '修改 GPU 数量'),
                 ('7', '修改地区'),
@@ -462,7 +549,7 @@ def _edit_job(payload: dict[str, Any], input_fn: InputFn, *, clear_screen_enable
                 ('1', '修改任务名'),
                 ('2', '修改频率'),
                 ('3', '修改目标时间'),
-                ('4', '修改提前小时'),
+                ('4', '修改提前多久'),
                 ('5', '修改实例 ID'),
                 ('6', '启用/停用任务'),
                 ('0', '返回'),

@@ -171,7 +171,14 @@ notifications:
 
 ## `tasks.keeper`
 
-Keeper 用于在实例释放前的保活窗口内接管实例，避免实例到期释放。
+Keeper 用于在实例释放前接管保活，避免关机实例到期被释放。
+
+普通使用只需要先理解两个时间：
+
+- `shutdown_release_after_hours`：关机后最长保留时间。AutoDL 关机后大约多久会释放实例，例如 `360` 表示 15 天。
+- `keeper_trigger_before_hours`：释放前多久开始保活。例如 `72` 表示预计释放前 3 天进入 Keeper 接管窗口。
+
+看板里的“几小时/几天内临期”口径来自 `keeper_trigger_before_hours`。
 
 示例：
 
@@ -197,11 +204,22 @@ tasks:
 
 #### `shutdown_release_after_hours`
 
-实例关机后预计多久会释放。这个值用于计算释放时间。
+关机后最长保留时间，单位小时。这个值用于按“关机时间 + 保留时间”估算释放时间。
+
+常见填写：
+
+- `360`：关机后约 15 天释放。
+- `168`：关机后约 7 天释放。
 
 #### `keeper_trigger_before_hours`
 
-距离预计释放时间还有多久时开始进入 Keeper 接管窗口。看板中“几小时/几天内临期”的口径也来自这个值。
+释放前多久开始保活，单位小时。
+
+常见填写：
+
+- `72`：释放前 3 天开始保活。
+- `24`：释放前 1 天开始保活。
+- `6`：释放前 6 小时开始保活。
 
 #### `interval_minutes`
 
@@ -246,6 +264,7 @@ tasks:
         advance_hours: 2
         schedule_mode: "daily"
         weekdays: []
+        run_date: ""
         timezone: "Asia/Shanghai"
 ```
 
@@ -280,17 +299,29 @@ tasks:
 
 #### `target_time`
 
-目标时间，格式：
+目标时间。配置文件里使用 `HH:MM`：
 
 ```text
 HH:MM
 ```
 
-终端 UI 会尽量简化输入，支持不输入冒号的常见时间写法。
+终端 UI 支持更省事的写法：
+
+- `9` -> `09:00`
+- `930` -> `09:30`
+- `09:30` -> `09:30`
+- `1430` -> `14:30`
 
 #### `advance_hours`
 
-目标时间前多少小时开始进入抢机窗口。
+目标时间前多久开始进入抢机窗口，单位是小时。支持小数，例如 `1.5` 表示 1 小时 30 分钟。
+
+终端 UI 支持：
+
+- `90m`
+- `1.5h`
+- `2h`
+- `2`
 
 #### `schedule_mode`
 
@@ -301,6 +332,20 @@ HH:MM
 - `daily`：每天
 - `once`：单次
 - `weekly`：每周
+
+`once` 表示按 `run_date + target_time` 执行一次，成功、超过截止时间或目标不存在后会自动暂停这个任务。
+
+#### `run_date`
+
+仅 `schedule_mode: "once"` 使用，格式为 `YYYY-MM-DD`。
+
+示例：
+
+```yaml
+schedule_mode: "once"
+run_date: "2026-05-20"
+target_time: "09:30"
+```
 
 #### `weekdays`
 
@@ -313,6 +358,14 @@ HH:MM
 - `5`：周五
 - `6`：周六
 - `7`：周日
+
+终端 UI 支持：
+
+- `1,3,5`
+- `135`
+- `周一三五`
+- `工作日`
+- `周末`
 
 #### `timezone`
 

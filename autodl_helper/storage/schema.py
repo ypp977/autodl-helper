@@ -85,7 +85,7 @@ CREATE TABLE IF NOT EXISTS scheduled_job_control (
     job_name TEXT NOT NULL,
     enabled INTEGER NOT NULL,
     target_time_override TEXT NOT NULL DEFAULT '',
-    advance_hours_override INTEGER,
+                advance_hours_override REAL,
     source TEXT NOT NULL,
     updated_at TEXT NOT NULL,
     PRIMARY KEY(account_name, job_name)

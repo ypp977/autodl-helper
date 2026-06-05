@@ -82,6 +82,33 @@ def test_weekly_job_skips_non_matching_weekday(tmp_path):
     assert client._list_calls == 0
 
 
+def test_once_job_with_run_date_skips_until_that_date(tmp_path):
+    client = DummyClient()
+    job = scheduled_start.ScheduledStartJobRuntime(
+        job_name='once-gpu',
+        instance_id='iid',
+        target_time='14:00',
+        advance_hours=1.5,
+        schedule_mode='once',
+        run_date='2026-04-09',
+        timezone='Asia/Shanghai',
+    )
+
+    result = scheduled_start.run_scheduled_start_job(
+        client=client,
+        notifier=DummyNotifier(),
+        state_store=StateStore(tmp_path / 'state.json'),
+        job=job,
+        now=datetime(2026, 4, 8, 13, 0, 0),
+    )
+
+    assert result == 'outside_window'
+    assert result.reason == 'not_scheduled_today'
+    assert job.window_key(datetime(2026, 4, 8, 13, 0, 0)) == '2026-04-09'
+    assert client.open_calls == []
+    assert client._list_calls == 0
+
+
 def test_weekly_job_window_key_includes_weekday():
     job = scheduled_start.ScheduledStartJobRuntime(
         job_name='weekly-gpu',

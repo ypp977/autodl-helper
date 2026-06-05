@@ -34,7 +34,7 @@ def _add_scheduled_override_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument('--scheduled-poll-interval', type=int, help='Override scheduled-start poll interval in seconds')
     parser.add_argument('--scheduled-job', help='Only use one scheduled-start job name (or instance_id) for this command')
     parser.add_argument('--target-time', help='Override target_time for the selected scheduled-start job')
-    parser.add_argument('--advance-hours', type=int, help='Override advance_hours for the selected scheduled-start job')
+    parser.add_argument('--advance-hours', type=float, help='Override advance_hours for the selected scheduled-start job')
 
 
 def _add_auth_override_args(parser: argparse.ArgumentParser) -> None:

@@ -212,6 +212,42 @@ def test_config_wizard_edits_single_scheduled_job_field(tmp_path):
     assert job['enabled'] is True
 
 
+def test_config_wizard_edits_scheduled_advance_with_duration_text(tmp_path):
+    config_path = tmp_path / 'config.yaml'
+    db_path = tmp_path / 'data' / 'autodl-helper.db'
+    payload = _valid_payload(str(db_path))
+    payload['tasks']['scheduled_start']['jobs'] = [
+        {
+            'enabled': True,
+            'name': 'fixed-job',
+            'instance_id': 'iid-1',
+            'target_time': '13:00',
+            'advance_hours': 2,
+            'timezone': 'Asia/Shanghai',
+        }
+    ]
+    write_raw_settings(config_path, payload)
+
+    from autodl_helper.ui.config_wizard import run_config_wizard
+
+    inputs = iter([
+        '1',
+        '2',
+        '1',
+        '4',
+        '90m',
+        '0',
+        '0',
+        '0',
+    ])
+
+    saved = run_config_wizard(config_path, input_fn=lambda prompt='': next(inputs))
+    job = read_raw_settings(config_path)['tasks']['scheduled_start']['jobs'][0]
+
+    assert saved is True
+    assert job['advance_hours'] == 1.5
+
+
 def test_config_wizard_edits_scheduled_job_frequency_to_weekly(tmp_path):
     config_path = tmp_path / 'config.yaml'
     db_path = tmp_path / 'data' / 'autodl-helper.db'
@@ -251,6 +287,76 @@ def test_config_wizard_edits_scheduled_job_frequency_to_weekly(tmp_path):
     assert job['weekdays'] == [1, 3, 5]
 
 
+def test_config_wizard_accepts_friendly_weekday_input(tmp_path):
+    config_path = tmp_path / 'config.yaml'
+    db_path = tmp_path / 'data' / 'autodl-helper.db'
+    payload = _valid_payload(str(db_path))
+    payload['tasks']['scheduled_start']['jobs'] = [
+        {
+            'enabled': True,
+            'name': 'fixed-job',
+            'instance_id': 'iid-1',
+            'target_time': '13:00',
+            'advance_hours': 2,
+            'schedule_mode': 'daily',
+            'timezone': 'Asia/Shanghai',
+        }
+    ]
+    write_raw_settings(config_path, payload)
+
+    from autodl_helper.ui.config_wizard import run_config_wizard
+
+    inputs = iter([
+        '1',
+        '2',
+        '1',
+        '2',
+        '3',
+        '周一三五',
+        '0',
+        '0',
+        '0',
+    ])
+
+    saved = run_config_wizard(config_path, input_fn=lambda prompt='': next(inputs))
+    job = read_raw_settings(config_path)['tasks']['scheduled_start']['jobs'][0]
+
+    assert saved is True
+    assert job['schedule_mode'] == 'weekly'
+    assert job['weekdays'] == [1, 3, 5]
+
+
+def test_config_wizard_once_schedule_prompts_for_run_date(tmp_path):
+    config_path = tmp_path / 'config.yaml'
+    db_path = tmp_path / 'data' / 'autodl-helper.db'
+    write_raw_settings(config_path, _valid_payload(str(db_path)))
+
+    from autodl_helper.ui.config_wizard import run_config_wizard
+
+    inputs = iter([
+        '1',
+        '1',
+        '1',
+        'once-job',
+        '930',
+        '1.5h',
+        '1',
+        '2026-05-20',
+        'iid-1',
+        '0',
+        '0',
+    ])
+
+    saved = run_config_wizard(config_path, input_fn=lambda prompt='': next(inputs))
+    job = read_raw_settings(config_path)['tasks']['scheduled_start']['jobs'][0]
+
+    assert saved is True
+    assert job['schedule_mode'] == 'once'
+    assert job['run_date'] == '2026-05-20'
+    assert job['target_time'] == '09:30'
+    assert job['advance_hours'] == 1.5
+
+
 def test_config_wizard_keeper_menu_saves_on_exit_without_extra_confirm(tmp_path, capsys):
     config_path = tmp_path / 'config.yaml'
     db_path = tmp_path / 'data' / 'autodl-helper.db'
@@ -263,7 +369,7 @@ def test_config_wizard_keeper_menu_saves_on_exit_without_extra_confirm(tmp_path,
     inputs = iter([
         '2',  # Keeper 参数
         '1',  # 核心参数
-        '1',  # 到期前触发保活
+        '1',  # 释放前多久开始保活
         '18',
         '0',  # 返回 Keeper 菜单
         '0',  # 返回配置管理
@@ -293,7 +399,7 @@ def test_config_wizard_save_success_does_not_call_saved_config_a_draft(tmp_path,
     inputs = iter([
         '2',  # Keeper 参数
         '1',  # 核心参数
-        '1',  # 到期前触发保活
+        '1',  # 释放前多久开始保活
         '18',
         '0',
         '0',

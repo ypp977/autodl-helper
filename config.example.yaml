@@ -36,8 +36,8 @@ notifications:
 tasks:
   keeper:
     enabled: true
-    shutdown_release_after_hours: 360   # 最长保留时长
-    keeper_trigger_before_hours: 6      # 距离释放多久开始接管
+    shutdown_release_after_hours: 360   # 关机后最长保留时间，360=15天
+    keeper_trigger_before_hours: 72     # 释放前多久开始保活，72=3天
     interval_minutes: 60                # Keeper 检查频率
     power_on_wait_seconds: 60
     power_off_wait_seconds: 5
@@ -57,6 +57,7 @@ tasks:
         advance_hours: 2
         schedule_mode: "daily"      # daily / once / weekly
         weekdays: []                # weekly 时使用，1=周一 ... 7=周日
+        run_date: ""                # once 时使用，格式 YYYY-MM-DD
         timezone: "Asia/Shanghai"
 
       # 例 2：按筛选条件抢机
@@ -66,6 +67,7 @@ tasks:
         advance_hours: 1
         schedule_mode: "daily"
         weekdays: []
+        run_date: ""
         timezone: "Asia/Shanghai"
         selector:
           regions:

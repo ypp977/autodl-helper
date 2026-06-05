@@ -59,15 +59,16 @@ def _normalize_job_signature_payload(
     job: ScheduledStartJob,
     *,
     target_time: str | None = None,
-    advance_hours: int | None = None,
+    advance_hours: float | None = None,
 ) -> dict[str, Any]:
     selector = job.selector
     return {
         'instance_id': str(job.instance_id or ''),
         'target_time': str(target_time if target_time is not None else job.target_time or ''),
-        'advance_hours': int(advance_hours if advance_hours is not None else job.advance_hours or 0),
+        'advance_hours': float(advance_hours if advance_hours is not None else job.advance_hours or 0),
         'schedule_mode': str(getattr(job, 'schedule_mode', 'daily') or 'daily'),
         'weekdays': list(getattr(job, 'weekdays', []) or []),
+        'run_date': str(getattr(job, 'run_date', '') or ''),
         'timezone': str(getattr(job, 'timezone', 'Asia/Shanghai') or 'Asia/Shanghai'),
         'selector': {
             'regions': list(getattr(selector, 'regions', []) or []),
@@ -82,7 +83,7 @@ def scheduled_job_signature(
     job: ScheduledStartJob,
     *,
     target_time: str | None = None,
-    advance_hours: int | None = None,
+    advance_hours: float | None = None,
 ) -> str:
     return json.dumps(
         _normalize_job_signature_payload(job, target_time=target_time, advance_hours=advance_hours),
@@ -111,7 +112,7 @@ def apply_runtime_controls_to_scheduled_jobs(store: SQLiteStore, account_name: s
             if control.get('target_time_override'):
                 next_job = replace(next_job, target_time=str(control['target_time_override']))
             if control.get('advance_hours_override') is not None:
-                next_job = replace(next_job, advance_hours=int(control['advance_hours_override']))
+                next_job = replace(next_job, advance_hours=float(control['advance_hours_override']))
         effective.append(next_job)
     return effective
 

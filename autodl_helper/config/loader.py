@@ -102,9 +102,10 @@ class ScheduledStartJob:
     instance_id: str = ""
     name: str = ""
     target_time: str = "14:00"
-    advance_hours: int = 2
+    advance_hours: float = 2
     schedule_mode: str = "daily"
     weekdays: list[int] = field(default_factory=list)
+    run_date: str = ""
     timezone: str = "Asia/Shanghai"
     selector: ScheduledStartSelector | None = None
     priority: list[ScheduledStartPriority] = field(default_factory=list)
@@ -221,9 +222,10 @@ def _parse_scheduled_job(job: dict[str, Any]) -> ScheduledStartJob:
         instance_id=job.get("instance_id", ""),
         name=job.get("name", ""),
         target_time=job.get("target_time", "14:00"),
-        advance_hours=job.get("advance_hours", 2),
+        advance_hours=float(job.get("advance_hours", 2)),
         schedule_mode=str(job.get("schedule_mode", "daily") or "daily"),
         weekdays=[int(day) for day in (job.get("weekdays") or [])],
+        run_date=str(job.get("run_date", "") or ""),
         timezone=job.get("timezone", "Asia/Shanghai"),
         selector=selector,
         priority=priority,

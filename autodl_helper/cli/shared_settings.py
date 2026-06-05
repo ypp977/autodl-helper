@@ -187,7 +187,14 @@ def validate_settings(
             if not time_pattern.match(job.target_time):
                 errors.append(f'scheduled_start job {label} target_time must be HH:MM.')
             if job.advance_hours <= 0:
-                errors.append(f'scheduled_start job {label} advance_hours must be a positive integer.')
+                errors.append(f'scheduled_start job {label} advance_hours must be a positive number.')
+            if job.schedule_mode == 'once' and getattr(job, 'run_date', ''):
+                try:
+                    from datetime import date
+
+                    date.fromisoformat(job.run_date)
+                except ValueError:
+                    errors.append(f'scheduled_start job {label} run_date must be YYYY-MM-DD.')
             if job.selector is not None:
                 if not job.selector.gpu_model:
                     errors.append(f'scheduled_start job {label} selector.gpu_model is required.')
