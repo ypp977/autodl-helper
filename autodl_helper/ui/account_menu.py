@@ -93,6 +93,7 @@ def print_account_menu(
     except Exception as exc:
         print(color(f'账户状态读取失败: {exc}', RED))
     print()
+    print(color('登录用于刷新/获取凭据；健康检查用于验证能否拉取实例。', BLUE))
     print_menu_groups([
         ('状态', [('1', '刷新账户状态'), ('4', '账户健康检查')]),
         ('账户', [('2', '添加账户'), ('5', '编辑账户凭据'), ('6', '启用/停用账户'), ('7', '删除账户')]),

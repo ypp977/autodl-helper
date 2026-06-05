@@ -92,6 +92,7 @@ def run_daemon_control_menu(
             print(render_notice(notice, color_enabled=True))
             notice = ''
         print(_daemon_service_status_line(args, service_status_fn))
+        print(color('服务状态表示系统托管进程；守护进程心跳表示 daemon 是否仍在写入状态；配置重载表示 daemon 是否接受了最新 config.yaml。', BLUE))
         print(color('服务入口: service install/start/stop/restart/status', BLUE))
         print_menu_groups([
             ('服务', [('1', '启动服务'), ('2', '停止服务'), ('3', '重启服务')]),

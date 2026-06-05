@@ -281,6 +281,7 @@ def _print_keeper_menu(notice: str) -> None:
     if notice:
         print(render_notice(notice, color_enabled=True))
     print(color('配置入口: 配置管理 > Keeper 配置', BLUE))
+    print(color('立即执行 Keeper 会访问 AutoDL 官方接口，完成后自动回显结果。', BLUE))
     print_menu_groups([
         ('执行', [('1', '立即执行'), ('2', '恢复任务')]),
         ('查看', [('3', '执行详情')]),

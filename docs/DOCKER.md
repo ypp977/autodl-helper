@@ -1,6 +1,14 @@
 # Docker 使用说明
 
-Docker 镜像只运行守护进程，不提供网页界面，也不开放端口。
+Docker 镜像只运行守护进程，不支持终端 UI，不提供 Web 控制台，也不开放端口。
+
+日常操作请在宿主机使用：
+
+```bash
+autodl-helper ui --config config.yaml
+```
+
+Docker 适合长期运行 daemon；CLI 仍适合自动化、诊断和服务排障。
 
 ## 默认命令
 
@@ -37,4 +45,4 @@ docker run --rm \
 docker compose up -d --build
 ```
 
-`compose.yaml` 会挂载本地 `config.yaml`、`data/`、`logs/` 和 `.cache/`。容器不提供 UI，因此不会发布端口。
+`compose.yaml` 会挂载本地 `config.yaml`、`data/`、`logs/` 和 `.cache/`。容器不提供终端 UI 或 Web 控制台，因此不会发布端口。

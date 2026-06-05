@@ -176,6 +176,26 @@ def _daemon_line(
     return '    '.join(parts)
 
 
+def _data_source_line(
+    *,
+    keeper_live_rows: list[dict[str, Any]] | None = None,
+    refresh_status: str | None = None,
+) -> str:
+    if refresh_status:
+        return (
+            render_status('数据来源', '刷新中', BLUE)
+            + '    '
+            + color('已提交后台刷新任务，不阻塞输入；当前仍显示本地 SQLite 状态', BLUE)
+        )
+    if keeper_live_rows is not None:
+        return (
+            render_status('数据来源', 'AutoDL 官方实时数据', GREEN)
+            + '    '
+            + color('刚刚刷新', GREEN)
+        )
+    return render_status('数据来源', '本地 SQLite 历史', BLUE)
+
+
 def _keeper_failed(result: str) -> bool:
     return result in _SCHEDULED_FAILED or any(result.startswith(prefix) for prefix in _KEEPER_FAILED_PREFIXES)
 
@@ -280,11 +300,15 @@ def _keeper_lines(
 ) -> list[str]:
     control_lines = _keeper_control_lines(settings, store)
     due_window_label, due_window_delta = _keeper_due_window_label(settings)
+    keeper_settings = getattr(getattr(settings, 'tasks', None), 'keeper', None)
+    keeper_trigger_before_hours = int(getattr(keeper_settings, 'keeper_trigger_before_hours', 6) or 6)
+    source_line = color(f'临期口径: 释放前 {keeper_trigger_before_hours} 小时', BLUE)
     history_rows = store.read_history(task_type='keeper', limit=200)
     rows = live_rows if live_rows is not None else _history_rows_as_keeper_rows(history_rows)
     if not rows:
         return [
             *control_lines,
+            source_line,
             render_metric_row([
                 ('机器', '0 台', YELLOW),
                 ('上次检查', '-', YELLOW),
@@ -300,7 +324,6 @@ def _keeper_lines(
     now = datetime.now().astimezone()
     due_instances: dict[str, datetime] = {}
     next_keeper_times: list[datetime] = []
-    keeper_settings = getattr(getattr(settings, 'tasks', None), 'keeper', None)
     for row in rows:
         deadline = _keeper_release_deadline(row, keeper_settings)
         if deadline is not None:
@@ -349,7 +372,7 @@ def _keeper_lines(
         if len(due_instances) > 5:
             due_text += f', +{len(due_instances) - 5}'
         lines.append(color(f'即将临期: {due_text}', YELLOW))
-    return [*control_lines, *lines]
+    return [*control_lines, source_line, *lines]
 
 
 def _job_runtime(job: Any, poll_interval_seconds: int) -> ScheduledStartJobRuntime:
@@ -588,6 +611,7 @@ def _dashboard_lines(
             service_pending=service_pending,
         )
     ]
+    lines.append(_data_source_line(keeper_live_rows=keeper_live_rows, refresh_status=refresh_status))
     lines.extend(_section('Keeper', _keeper_lines(settings, store, live_rows=keeper_live_rows, live_checked_at=keeper_live_checked_at)))
     lines.extend(_section('抢机', _scheduled_lines(settings, store)))
     return lines
@@ -666,7 +690,15 @@ def _select_settings_menu(*, input_fn=builtins.input) -> str:
         notice = '无效选择，请输入 1/2/0'
 
 
-def _scheduled_job_control_entry(store: SQLiteStore, account_name: str, job: Any, *, scheduled_enabled: bool) -> dict[str, Any]:
+def _scheduled_job_control_entry(
+    store: SQLiteStore,
+    account_name: str,
+    job: Any,
+    *,
+    scheduled_enabled: bool,
+    poll_interval_seconds: int,
+    now: datetime,
+) -> dict[str, Any]:
     job_name = scheduled_job_identity(job)
     task_control = store.get_task_control(account_name, 'scheduled_start')
     job_control = store.get_scheduled_job_control(account_name, job_name)
@@ -681,6 +713,13 @@ def _scheduled_job_control_entry(store: SQLiteStore, account_name: str, job: Any
     else:
         status = '已暂停'
         status_color = RED
+    runtime = _job_runtime(job, poll_interval_seconds)
+    start, deadline, window_state = _job_window(runtime, now)
+    window_label = f"{start.strftime('%m-%d %H:%M')}~{deadline.strftime('%m-%d %H:%M')}"
+    if window_state == 'running':
+        countdown_label = f"剩余 {_duration((deadline - now).total_seconds())}"
+    else:
+        countdown_label = f"距开始 {_duration((start - now).total_seconds())}"
     return {
         'account_name': account_name,
         'job': job,
@@ -689,17 +728,30 @@ def _scheduled_job_control_entry(store: SQLiteStore, account_name: str, job: Any
         'job_control': job_control,
         'status': status,
         'status_color': status_color,
+        'window_label': window_label,
+        'countdown_label': countdown_label,
     }
 
 
 def _scheduled_control_entries(settings: Any, store: SQLiteStore, accounts: list[Any]) -> list[dict[str, Any]]:
     scheduled = getattr(settings.tasks, 'scheduled_start', None)
     scheduled_enabled = bool(getattr(scheduled, 'enabled', False))
+    poll_interval_seconds = int(getattr(scheduled, 'poll_interval_seconds', 5) or 5)
     jobs = list(getattr(scheduled, 'jobs', []) or [])
     entries: list[dict[str, Any]] = []
+    now = datetime.now().astimezone()
     for account in accounts:
         for job in jobs:
-            entries.append(_scheduled_job_control_entry(store, account.name, job, scheduled_enabled=scheduled_enabled))
+            entries.append(
+                _scheduled_job_control_entry(
+                    store,
+                    account.name,
+                    job,
+                    scheduled_enabled=scheduled_enabled,
+                    poll_interval_seconds=poll_interval_seconds,
+                    now=now,
+                )
+            )
     return entries
 
 
@@ -715,7 +767,9 @@ def _scheduled_entry_line(index: int, entry: dict[str, Any]) -> str:
         gpu_count = getattr(selector, 'gpu_count', '-') if selector is not None else '-'
         detail = f"筛选 {color(str(gpu_model or '-'), YELLOW)} x{color(str(gpu_count or '-'), YELLOW)}"
     target = color(str(getattr(job, 'target_time', '-') or '-'), CYAN)
-    return f'{index:>2}. [{status}] {label} | {target} | {detail}'
+    window = color(str(entry.get('window_label') or '-'), CYAN)
+    countdown = color(str(entry.get('countdown_label') or '-'), YELLOW)
+    return f'{index:>2}. [{status}] {label} | 目标 {target} | 下次执行窗口 {window} | {countdown} | {detail}'
 
 
 def _print_scheduled_control_entries(entries: list[dict[str, Any]]) -> None:
@@ -798,6 +852,8 @@ def _run_scheduled_management_menu(args: Any, *, input_fn=builtins.input) -> str
             print(color(f'抢机状态读取失败: {exc}', RED))
         print()
         print(color('配置入口: 配置管理 > 抢机配置', BLUE))
+        print(color('这里只暂停/恢复任务，不修改 config.yaml。', BLUE))
+        print(color('新增、删除、修改目标时间请进入 设置管理 > 配置管理 > 抢机配置。', BLUE))
         print_menu_groups([
             ('查看', [('1', '刷新状态')]),
             ('任务', [('2', '暂停单个任务'), ('3', '恢复单个任务')]),
@@ -837,7 +893,7 @@ def _refresh_keeper_dashboard(args: Any) -> tuple[list[dict[str, Any]] | None, d
         store = SQLiteStore(settings.storage.database_file)
         store.init_schema()
         rows, checked_at = _keeper_live_rows(settings, store)
-        return rows, checked_at, f'已刷新最新状态: Keeper {len(rows)} 台'
+        return rows, checked_at, f'刚刚刷新: Keeper {len(rows)} 台'
     except Exception as exc:
         return None, None, f'刷新最新状态失败: {exc}'
 
@@ -857,7 +913,7 @@ def _refresh_dashboard_snapshot(args: Any) -> DashboardSnapshot:
     if keeper_rows is None:
         message = keeper_message
     else:
-        message = f'已刷新最新状态: Keeper {len(keeper_rows)} 台 | 服务 {service_label}'
+        message = f'刚刚刷新: Keeper {len(keeper_rows)} 台 | 服务 {service_label}'
     return DashboardSnapshot(
         keeper_live_rows=keeper_rows,
         keeper_live_checked_at=keeper_checked_at,
@@ -941,20 +997,26 @@ def _consume_refresh_task(
     if task is None:
         return None, current_rows, current_checked_at, current_service_snapshot, ''
     if not task.done():
-        return task, current_rows, current_checked_at, current_service_snapshot, '刷新中，完成后将更新状态栏'
+        return task, current_rows, current_checked_at, current_service_snapshot, '已提交后台刷新任务，不阻塞输入；刷新中'
     try:
         snapshot = task.result()
     except Exception as exc:
         return None, current_rows, current_checked_at, current_service_snapshot, f'刷新最新状态失败: {exc}'
     if isinstance(snapshot, DashboardSnapshot):
+        message = (
+            snapshot.message
+            .replace('已刷新最新状态失败:', '刷新失败:')
+            .replace('刷新最新状态失败:', '刷新失败:')
+            .replace('已刷新最新状态:', '刚刚刷新:')
+        )
         if snapshot.keeper_live_rows is None:
-            return None, current_rows, current_checked_at, snapshot.service_snapshot or current_service_snapshot, snapshot.message
+            return None, current_rows, current_checked_at, snapshot.service_snapshot or current_service_snapshot, message
         return (
             None,
             snapshot.keeper_live_rows,
             snapshot.keeper_live_checked_at,
             snapshot.service_snapshot or current_service_snapshot,
-            snapshot.message,
+            message,
         )
     rows, checked_at, message = snapshot
     if rows is None:
@@ -985,7 +1047,7 @@ def _read_main_choice_with_background_repaint(
             keeper_live_checked_at,
             service_snapshot,
         )
-        if refresh_notice and refresh_notice != '刷新中，完成后将更新状态栏':
+        if refresh_notice and refresh_notice != '已提交后台刷新任务，不阻塞输入；刷新中':
             notice = refresh_notice
             changed = True
         service_task, service_snapshot, service_notice = _consume_service_status_task(
@@ -1081,7 +1143,7 @@ def run_ui(args: Any, *, input_fn=builtins.input) -> int:
                 notice = '刷新中，请稍后查看状态栏'
             else:
                 refresh_task = _start_refresh_task(args)
-                notice = '刷新任务已提交，状态栏显示刷新中'
+                notice = '已提交后台刷新任务，不阻塞输入；状态栏显示刷新中'
             if service_task is None or service_task.done():
                 service_task = _start_service_status_task(args)
             continue

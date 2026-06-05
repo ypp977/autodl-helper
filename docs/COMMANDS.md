@@ -10,9 +10,20 @@ python -m autodl_helper <command> [options]
 
 示例统一使用 `autodl-helper`。从源码运行时，把它替换成 `python main.py`。
 
+## 界面定位
+
+- 日常操作入口：`autodl-helper ui --config config.yaml`。终端 UI 是主控制台，负责状态看板、Keeper 管理、抢机管理、账号管理、配置管理和 daemon 控制。
+- 高级/自动化入口：CLI 命令。CLI 负责脚本化、诊断、JSON 输出、服务管理和排障。
+- Docker 只运行 daemon，不支持终端 UI，不提供 Web 控制台。
+- 当前暂不实现 Web 界面；只有出现多人共享、远程访问、权限分级或长期图表等需求时再考虑。
+
 ## 快速参考
 
 ```bash
+# 日常主控制台
+autodl-helper ui --config config.yaml
+
+# 高级/自动化/排障入口
 autodl-helper init
 autodl-helper login --config config.yaml --account main
 autodl-helper login --config config.yaml --all
@@ -23,7 +34,6 @@ autodl-helper run daemon --config config.yaml
 autodl-helper run daemon --config config.yaml --run-once
 autodl-helper run keeper --config config.yaml
 autodl-helper run scheduled --config config.yaml
-autodl-helper ui --config config.yaml
 autodl-helper service status --config config.yaml
 autodl-helper debug health --config config.yaml --json
 autodl-helper debug history --config config.yaml --limit 50
@@ -103,9 +113,10 @@ autodl-helper config validate --config config.yaml --json
 
 刷新类操作保持非阻塞：
 
-- 主菜单“刷新状态”会提交后台刷新任务，状态栏先显示“刷新中”，任务完成后自动重绘看板。
+- 主菜单“刷新状态”会提交后台刷新任务，不阻塞输入；状态栏先显示“刷新中”，任务完成后自动重绘看板。
 - Keeper 管理里的“立即执行”和账户管理里的“账户健康检查”同样后台执行，完成后会在当前页面自动回显结果。
 - 被动看板渲染只读本地 SQLite 历史；实时 AutoDL 接口请求只发生在显式操作中。
+- 看板会区分数据来源：本地 SQLite 历史、刷新中、刚刚刷新、刷新失败或 AutoDL 官方实时数据。
 
 ## JSON 输出契约
 

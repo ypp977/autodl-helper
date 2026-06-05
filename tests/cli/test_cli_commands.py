@@ -60,6 +60,17 @@ def test_unknown_flat_command_is_not_registered():
     assert cli.main(['legacy-flat-command']) == 2
 
 
+def test_cli_help_positions_ui_and_cli_roles(capsys):
+    code = cli.main(['--help'])
+    captured = capsys.readouterr()
+
+    assert code == 0
+    assert '终端 UI 主控制台' in captured.out
+    assert '高级/自动化入口' in captured.out
+    assert '启动终端 UI 主控制台' in captured.out
+    assert '诊断和排障命令' in captured.out
+
+
 
 def test_run_all_subcommand_invokes_variant_runner(monkeypatch):
     calls = []

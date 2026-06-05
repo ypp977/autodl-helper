@@ -185,6 +185,9 @@ def test_run_ui_prints_compact_keeper_and_scheduled_dashboard(tmp_path, capsys, 
     assert '服务' in captured.out
     assert '重载' in captured.out
     assert '心跳' in captured.out
+    assert '数据来源' in captured.out
+    assert '本地 SQLite 历史' in captured.out
+    assert '临期口径: 释放前 72 小时' in captured.out
     assert 'reload' not in captured.out
     assert 'heartbeat' not in captured.out
     assert '─' * 12 in captured.out
@@ -447,7 +450,8 @@ def test_run_ui_refresh_fetches_latest_keeper_dashboard_state(tmp_path, capsys, 
     latest_screen = captured.out.split('\x1b[2J\x1b[H')[-1]
 
     assert code == 0
-    assert '已刷新最新状态: Keeper 1 台' in latest_screen
+    assert '刚刚刷新: Keeper 1 台' in latest_screen
+    assert 'AutoDL 官方实时数据' in latest_screen
     assert 'iid-fresh' in latest_screen
     assert 'iid-stale' not in latest_screen
     assert '3天内临期 1 台' in latest_screen
@@ -512,7 +516,8 @@ def test_run_ui_refresh_updates_keeper_and_service_from_same_snapshot(tmp_path, 
     latest_screen = strip_ansi(captured.out.split('\x1b[2J\x1b[H')[-1])
 
     assert code == 0
-    assert '已刷新最新状态: Keeper 1 台 | 服务 运行中' in latest_screen
+    assert '刚刚刷新: Keeper 1 台 | 服务 运行中' in latest_screen
+    assert 'AutoDL 官方实时数据' in latest_screen
     assert '服务 ● 运行中' in latest_screen
     assert 'iid-fresh' in latest_screen
 
@@ -592,7 +597,51 @@ def test_run_ui_refresh_submits_background_task_without_blocking_input(tmp_path,
     assert code == 0
     assert len(calls) == 1
     assert '刷新中' in captured.out
+    assert '已提交后台刷新任务，不阻塞输入' in captured.out
     assert '面板' in captured.out
+
+
+def test_run_ui_refresh_failure_uses_clear_failed_status(tmp_path, capsys, monkeypatch):
+    db_path = tmp_path / 'data' / 'autodl-helper.db'
+    config_path = tmp_path / 'config.yaml'
+    config_path.write_text(
+        '\n'.join([
+            'accounts:',
+            '  - name: main',
+            '    enabled: true',
+            '    authorization: Bearer token',
+            'storage:',
+            f'  database_file: {db_path}',
+            'tasks:',
+            '  keeper:',
+            '    enabled: true',
+        ]),
+        encoding='utf-8',
+    )
+    monkeypatch.setattr('autodl_helper.ui.app.service_status', lambda config_path: {'status_label': '未安装', 'running': False})
+
+    class FailedTask:
+        def done(self):
+            return True
+
+        def result(self):
+            return ui_app.DashboardSnapshot(
+                keeper_live_rows=None,
+                keeper_live_checked_at=None,
+                service_snapshot={'status_label': '未安装', 'running': False},
+                message='刷新最新状态失败: network down',
+            )
+
+    monkeypatch.setattr('autodl_helper.ui.app._start_refresh_task', lambda args: FailedTask())
+    inputs = iter(['1', '0'])
+
+    code = run_ui(SimpleNamespace(command='ui', config=str(config_path)), input_fn=lambda prompt='': next(inputs))
+    captured = capsys.readouterr()
+    plain = strip_ansi(captured.out)
+
+    assert code == 0
+    assert '刷新失败: network down' in plain
+    assert '刷新最新状态失败' not in plain
 
 
 def test_run_ui_refresh_repaints_when_background_task_finishes_while_waiting_for_input(tmp_path, capsys, monkeypatch):
@@ -666,7 +715,7 @@ def test_run_ui_refresh_repaints_when_background_task_finishes_while_waiting_for
 
     assert code == 0
     assert fresh_rendered['value'] is True
-    assert '已刷新最新状态: Keeper 1 台 | 服务 运行中' in strip_ansi(captured.out)
+    assert '刚刚刷新: Keeper 1 台 | 服务 运行中' in strip_ansi(captured.out)
     assert 'iid-fresh' in strip_ansi(captured.out)
 
 
@@ -1124,6 +1173,10 @@ def test_daemon_and_keeper_menus_use_page_style_notice(capsys):
     assert keeper_notice == ''
     assert captured.out.count('\x1b[2J\x1b[H') >= 2
     assert captured.out.count('提示: 无效选择，请输入 1/2/3/0') >= 2
+    assert '服务状态表示系统托管进程' in strip_ansi(captured.out)
+    assert '守护进程心跳表示 daemon 是否仍在写入状态' in strip_ansi(captured.out)
+    assert '配置重载表示 daemon 是否接受了最新 config.yaml' in strip_ansi(captured.out)
+    assert '立即执行 Keeper 会访问 AutoDL 官方接口，完成后自动回显结果。' in strip_ansi(captured.out)
 
 
 def test_run_ui_can_show_account_management_and_login(tmp_path, capsys, monkeypatch):
@@ -1157,6 +1210,8 @@ def test_run_ui_can_show_account_management_and_login(tmp_path, capsys, monkeypa
     assert code == 0
     assert calls == ['main']
     assert '账户管理' in captured.out
+    assert '登录用于刷新/获取凭据' in strip_ansi(captured.out)
+    assert '健康检查用于验证能否拉取实例' in strip_ansi(captured.out)
     assert 'main' in captured.out
     assert '可密码登录' in captured.out
     assert '账户登录成功: main' in captured.out
@@ -1531,6 +1586,10 @@ def test_run_ui_scheduled_management_is_read_only_business_page(tmp_path, capsys
     assert '恢复单个任务' in captured.out
     assert '暂停全部抢机' in captured.out
     assert '恢复全部抢机' in captured.out
+    assert '这里只暂停/恢复任务，不修改 config.yaml。' in strip_ansi(captured.out)
+    assert '新增、删除、修改目标时间请进入 设置管理 > 配置管理 > 抢机配置。' in strip_ansi(captured.out)
+    assert '下次执行窗口' in strip_ansi(captured.out)
+    assert '距开始' in strip_ansi(captured.out)
     assert '新增任务' not in captured.out
     assert '编辑任务' not in captured.out
     assert '修改轮询' not in captured.out

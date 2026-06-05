@@ -9,6 +9,13 @@
 
 项目不提供图形界面客户端。Docker 镜像只运行守护进程。macOS、Windows、Linux 推荐通过 `pipx`、`venv` 或 Nuitka 控制台可执行文件使用。
 
+## 操作界面定位
+
+- 日常使用推荐：`autodl-helper ui --config config.yaml`。终端 UI 是主控制台，负责状态看板、Keeper 管理、抢机管理、账号管理、配置管理和 daemon 控制。
+- 自动化/排障推荐：CLI 命令。CLI 面向脚本化、诊断、JSON 输出、服务管理和排障。
+- Docker 只运行 daemon，不支持终端 UI，不提供 Web 控制台，也不发布端口。
+- Web 界面暂不实现；只有后续出现多人共享、远程访问、权限分级或长期图表等明确需求时再考虑。
+
 ## 公开入口
 
 ```bash
@@ -65,7 +72,10 @@ autodl-helper ui --config config.yaml
 ## 常用命令
 
 ```bash
+# 日常主控制台
 autodl-helper ui --config config.yaml
+
+# 高级/自动化/排障入口
 autodl-helper run keeper --config config.yaml
 autodl-helper run scheduled --config config.yaml
 autodl-helper run daemon --config config.yaml
@@ -82,6 +92,7 @@ autodl-helper config validate --config config.yaml
 - Keeper 主要看两个时间：关机后最长保留多久、释放前多久开始保活。
 - 抢机目标时间在 UI 中可输入 `9`、`930`、`09:30`、`1430`。
 - 抢机提前时间在 UI 中可输入 `90m`、`1.5h`、`2h`。
+- 每周几在 UI 中可输入 `135`、`1,3,5`、`周一三五`、`工作日`、`周末`。
 - 单次抢机会要求填写执行日期，格式是 `YYYY-MM-DD`。
 
 ## Docker 守护进程
