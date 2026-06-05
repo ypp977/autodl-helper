@@ -1,4 +1,5 @@
 from datetime import datetime, timedelta, timezone
+import threading
 from types import SimpleNamespace
 
 from autodl_helper.core.config import (
@@ -149,6 +150,30 @@ def test_daemon_launch_claim_respects_starting_state(tmp_path):
     assert claimed['claimed'] is True
     assert reused['claimed'] is False
     assert reused['launch_state'] == 'starting'
+
+
+def test_daemon_launch_claim_is_atomic_for_concurrent_callers(tmp_path):
+    store = SQLiteStore(tmp_path / 'data.db')
+    store.init_schema()
+    barrier = threading.Barrier(2)
+    results: list[dict[str, object]] = []
+
+    def claim_once(account: str) -> None:
+        barrier.wait(timeout=2)
+        results.append(claim_daemon_launch(store, account=account, starting_ttl_seconds=10))
+
+    threads = [
+        threading.Thread(target=claim_once, args=('main',)),
+        threading.Thread(target=claim_once, args=('backup',)),
+    ]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join(timeout=2)
+
+    assert len(results) == 2
+    assert sum(1 for result in results if result['claimed'] is True) == 1
+    assert sum(1 for result in results if result['claimed'] is False) == 1
 
 
 def test_daemon_launch_claim_writes_launch_snapshot_in_one_batch():

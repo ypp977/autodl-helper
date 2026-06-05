@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import datetime, timedelta, timezone
 from typing import Any, Protocol
 
 from .records import scheduled_job_control_row, task_control_row, utc_now_iso
@@ -58,6 +59,53 @@ class ControlStoreMixin:
         with self.connect() as conn:
             rows = conn.execute('SELECT key, value FROM runtime_control').fetchall()
             return {str(row['key']): str(row['value']) for row in rows}
+
+    def claim_daemon_launch_starting(self, *, account: str | None, starting_ttl_seconds: int) -> bool:
+        self.init_schema()
+        now = datetime.now(timezone.utc)
+        now_iso = now.isoformat()
+        with self.connect() as conn:
+            conn.execute('BEGIN IMMEDIATE')
+            rows = conn.execute(
+                """
+                SELECT key, value
+                FROM runtime_control
+                WHERE key IN (
+                    'daemon_launch_state',
+                    'daemon_launch_started_at',
+                    'daemon_launch_fused_until'
+                )
+                """
+            ).fetchall()
+            snapshot = {str(row['key']): str(row['value']) for row in rows}
+            state = str(snapshot.get('daemon_launch_state') or 'idle')
+            started_at = _parse_runtime_datetime(snapshot.get('daemon_launch_started_at', ''))
+            fused_until = _parse_runtime_datetime(snapshot.get('daemon_launch_fused_until', ''))
+
+            blocked = state == 'running'
+            if state == 'fused':
+                blocked = fused_until is None or fused_until.astimezone(timezone.utc) > now
+            if state == 'starting':
+                blocked = started_at is None or now - started_at.astimezone(timezone.utc) <= timedelta(seconds=max(1, starting_ttl_seconds))
+            if blocked:
+                return False
+
+            conn.executemany(
+                """
+                INSERT INTO runtime_control(key, value, updated_at)
+                VALUES (?, ?, ?)
+                ON CONFLICT(key) DO UPDATE SET
+                    value = excluded.value,
+                    updated_at = excluded.updated_at
+                """,
+                [
+                    ('daemon_launch_state', 'starting', now_iso),
+                    ('daemon_launch_account', str(account or ''), now_iso),
+                    ('daemon_launch_pid', '', now_iso),
+                    ('daemon_launch_started_at', now_iso, now_iso),
+                ],
+            )
+            return True
 
     def set_task_control(self, account_name: str, task_type: str, *, enabled: bool, source: str) -> None:
         self.init_schema()
@@ -160,3 +208,15 @@ class ControlStoreMixin:
         with self.connect() as conn:
             rows = conn.execute(query, params).fetchall()
             return [scheduled_job_control_row(row) for row in rows]
+
+
+def _parse_runtime_datetime(raw: str | None) -> datetime | None:
+    if not raw:
+        return None
+    try:
+        value = datetime.fromisoformat(raw)
+    except ValueError:
+        return None
+    if value.tzinfo is None:
+        return value.astimezone().astimezone(timezone.utc)
+    return value.astimezone(timezone.utc)

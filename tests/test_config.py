@@ -1,6 +1,8 @@
 from pathlib import Path
 import os
 
+import pytest
+
 from autodl_helper.core import config
 
 
@@ -69,6 +71,47 @@ def test_load_settings_reads_job_schedule_mode(tmp_path, monkeypatch):
 
     assert settings.tasks.scheduled_start.jobs[0].schedule_mode == 'weekly'
     assert settings.tasks.scheduled_start.jobs[0].weekdays == [1, 3, 5]
+
+
+def test_load_settings_parses_string_booleans(tmp_path, monkeypatch):
+    monkeypatch.delenv('Authorization', raising=False)
+    yaml_path = tmp_path / 'config.yaml'
+    yaml_path.write_text(
+        '\n'.join([
+            'accounts:',
+            '  - name: main',
+            '    enabled: "false"',
+            '    authorization: Bearer token',
+            'tasks:',
+            '  keeper:',
+            '    enabled: "0"',
+            '    fallback_to_status_at: "no"',
+            '  scheduled_start:',
+            '    enabled: "yes"',
+        ])
+    )
+
+    settings = config.load_settings(yaml_path)
+
+    assert settings.accounts[0].enabled is False
+    assert settings.tasks.keeper.enabled is False
+    assert settings.tasks.keeper.fallback_to_status_at is False
+    assert settings.tasks.scheduled_start.enabled is True
+
+
+def test_load_settings_rejects_invalid_boolean_string(tmp_path, monkeypatch):
+    monkeypatch.delenv('Authorization', raising=False)
+    yaml_path = tmp_path / 'config.yaml'
+    yaml_path.write_text(
+        '\n'.join([
+            'tasks:',
+            '  keeper:',
+            '    enabled: maybe',
+        ])
+    )
+
+    with pytest.raises(ValueError, match='tasks.keeper.enabled'):
+        config.load_settings(yaml_path)
 
 
 

@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import tempfile
 import time
 from pathlib import Path
 
@@ -25,17 +26,34 @@ def read_auth_cache(path: str | Path) -> dict[str, object] | None:
 def write_auth_cache(path: str | Path, authorization: str, *, cached_at: int | None = None) -> None:
     cache_path = Path(path)
     cache_path.parent.mkdir(parents=True, exist_ok=True)
-    temp_path = cache_path.with_suffix(cache_path.suffix + ".tmp")
+    temp_path: Path | None = None
     payload = {
         "authorization": authorization,
         "cached_at": cached_at if cached_at is not None else int(time.time()),
     }
-    temp_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True))
     try:
-        os.chmod(temp_path, 0o600)
-    except OSError:
-        logger.warning("无法设置 auth cache 临时文件权限: %s", temp_path)
-    os.replace(temp_path, cache_path)
+        with tempfile.NamedTemporaryFile(
+            "w",
+            encoding="utf-8",
+            dir=cache_path.parent,
+            prefix=f".{cache_path.name}.",
+            suffix=".tmp",
+            delete=False,
+        ) as tmp:
+            temp_path = Path(tmp.name)
+            json.dump(payload, tmp, ensure_ascii=False, indent=2, sort_keys=True)
+        try:
+            os.chmod(temp_path, 0o600)
+        except OSError:
+            logger.warning("无法设置 auth cache 临时文件权限: %s", temp_path)
+        os.replace(temp_path, cache_path)
+    except Exception:
+        if temp_path is not None:
+            try:
+                temp_path.unlink(missing_ok=True)
+            except OSError:
+                pass
+        raise
     try:
         os.chmod(cache_path, 0o600)
     except OSError:

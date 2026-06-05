@@ -105,6 +105,30 @@ class AutoDLClient:
         return result.get("code") == "Success"
 
     def list_instances(self, page: int = 1, page_size: int = 100) -> list[dict[str, Any]]:
+        if page != 1:
+            result = self._list_instances_page(page=page, page_size=page_size)
+            return _extract_instance_rows(result)
+
+        rows: list[dict[str, Any]] = []
+        current_page = 1
+        max_pages = 100
+        while current_page <= max_pages:
+            result = self._list_instances_page(page=current_page, page_size=page_size)
+            current_rows = _extract_instance_rows(result)
+            rows.extend(current_rows)
+            next_page = _next_instance_page(
+                result,
+                current_page=current_page,
+                page_size=page_size,
+                fetched_count=len(rows),
+                current_count=len(current_rows),
+            )
+            if next_page is None:
+                break
+            current_page = next_page
+        return rows
+
+    def _list_instances_page(self, *, page: int, page_size: int) -> dict[str, Any]:
         body = {
             "date_from": "",
             "date_to": "",
@@ -116,7 +140,7 @@ class AutoDLClient:
         result = self.post_json(INSTANCE_URL, body)
         if result.get("code") != "Success":
             raise RuntimeError(f"failed to list instances: {redact_text(redact_sensitive(result))}")
-        return result.get("data", {}).get("list", [])
+        return result
 
     @staticmethod
     def running_days(status_at: str, now: datetime | None = None) -> int:
@@ -129,3 +153,51 @@ class AutoDLClient:
         now = now or datetime.now(ASIA_SHANGHAI)
         release_at_time = datetime.fromisoformat(release_at.replace(" ", "T"))
         return (release_at_time - now).days
+
+
+def _instance_data(payload: dict[str, Any]) -> dict[str, Any]:
+    data = payload.get("data", {})
+    return data if isinstance(data, dict) else {}
+
+
+def _extract_instance_rows(payload: dict[str, Any]) -> list[dict[str, Any]]:
+    rows = _instance_data(payload).get("list", [])
+    return rows if isinstance(rows, list) else []
+
+
+def _metadata_int(data: dict[str, Any], *keys: str) -> int | None:
+    for key in keys:
+        value = data.get(key)
+        if value in {None, ""}:
+            continue
+        try:
+            return int(value)
+        except (TypeError, ValueError):
+            continue
+    return None
+
+
+def _next_instance_page(
+    payload: dict[str, Any],
+    *,
+    current_page: int,
+    page_size: int,
+    fetched_count: int,
+    current_count: int,
+) -> int | None:
+    if current_count <= 0:
+        return None
+    data = _instance_data(payload)
+    next_page = _metadata_int(data, "next_page", "nextPage", "next_page_index")
+    if next_page is not None and next_page > current_page:
+        return next_page
+    has_next = data.get("has_next", data.get("hasNext"))
+    if isinstance(has_next, bool):
+        return current_page + 1 if has_next else None
+    page_total = _metadata_int(data, "page_total", "pageTotal", "total_page", "total_pages")
+    if page_total is not None:
+        return current_page + 1 if current_page < page_total else None
+    total = _metadata_int(data, "total", "count", "total_count", "totalCount")
+    if total is not None and fetched_count < total:
+        return current_page + 1
+    return None

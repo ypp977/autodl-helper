@@ -721,9 +721,7 @@ def _command_service_uninstall(args) -> int:
 
 
 def _command_interactive(args) -> int:
-    from autodl_helper.ui import run_ui
-
-    return run_ui(args)
+    return _command_interactive_impl(args)
 
 
 def main(argv: Sequence[str] | None = None) -> int:

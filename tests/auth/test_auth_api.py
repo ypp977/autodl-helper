@@ -2,11 +2,13 @@ import json
 import os
 import time
 import logging
+import threading
 
 import pytest
 
 
 from autodl_helper import auth, api
+from autodl_helper.auth.cache import write_auth_cache
 
 
 class DummyResponse:
@@ -120,6 +122,31 @@ def test_resolve_authorization_writes_cache_file_with_restricted_permissions(mon
     assert payload['authorization'] == 'Bearer fresh'
     assert os.stat(cache_file).st_mode & 0o777 == 0o600
 
+
+def test_write_auth_cache_uses_unique_temp_files_for_concurrent_writes(tmp_path):
+    cache_file = tmp_path / '.autodl-helper-auth.json'
+    errors: list[BaseException] = []
+
+    def write_token(token: str) -> None:
+        try:
+            write_auth_cache(cache_file, token, cached_at=123)
+        except BaseException as exc:
+            errors.append(exc)
+
+    threads = [
+        threading.Thread(target=write_token, args=('Bearer one',)),
+        threading.Thread(target=write_token, args=('Bearer two',)),
+    ]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join(timeout=2)
+
+    assert errors == []
+    payload = json.loads(cache_file.read_text(encoding='utf-8'))
+    assert payload['authorization'] in {'Bearer one', 'Bearer two'}
+    assert payload['cached_at'] == 123
+    assert list(tmp_path.glob('*.tmp')) == []
 
 
 def test_autodl_client_post_json_uses_json_body(monkeypatch):
@@ -269,6 +296,59 @@ def test_autodl_client_list_instances_error_redacts_sensitive_response():
     assert 'nested-secret' not in message
     assert 'session-secret' not in message
     assert '<redacted>' in message
+
+
+def test_autodl_client_list_instances_fetches_following_pages_when_total_exceeds_first_page():
+    calls = []
+
+    class DummySession:
+        def post(self, **kwargs):
+            page_index = kwargs['json']['page_index']
+            calls.append(page_index)
+            if page_index == 1:
+                return DummyResponse({
+                    'code': 'Success',
+                    'data': {
+                        'list': [{'uuid': 'iid-1'}],
+                        'total': 2,
+                    },
+                })
+            return DummyResponse({
+                'code': 'Success',
+                'data': {
+                    'list': [{'uuid': 'iid-2'}],
+                    'total': 2,
+                },
+            })
+
+    client = api.AutoDLClient(authorization='Bearer token', min_day=7, session=DummySession())
+
+    rows = client.list_instances(page_size=1)
+
+    assert [row['uuid'] for row in rows] == ['iid-1', 'iid-2']
+    assert calls == [1, 2]
+
+
+def test_autodl_client_list_instances_explicit_page_does_not_auto_paginate():
+    calls = []
+
+    class DummySession:
+        def post(self, **kwargs):
+            calls.append(kwargs['json']['page_index'])
+            return DummyResponse({
+                'code': 'Success',
+                'data': {
+                    'list': [{'uuid': f"iid-{kwargs['json']['page_index']}"}],
+                    'total': 2,
+                },
+            })
+
+    client = api.AutoDLClient(authorization='Bearer token', min_day=7, session=DummySession())
+
+    rows = client.list_instances(page=2, page_size=1)
+
+    assert [row['uuid'] for row in rows] == ['iid-2']
+    assert calls == [2]
 
 
 def test_build_browser_launch_kwargs_prefers_explicit_executable():

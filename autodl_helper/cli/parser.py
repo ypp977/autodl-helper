@@ -3,6 +3,24 @@ from __future__ import annotations
 import argparse
 
 
+class ChineseHelpFormatter(argparse.HelpFormatter):
+    def start_section(self, heading):
+        translations = {
+            'options': '选项',
+            'positional arguments': '命令',
+            'subcommands': '子命令',
+        }
+        super().start_section(translations.get(heading, heading))
+
+
+class ChineseArgumentParser(argparse.ArgumentParser):
+    def __init__(self, *args, **kwargs):
+        kwargs.setdefault('formatter_class', ChineseHelpFormatter)
+        kwargs.setdefault('add_help', False)
+        super().__init__(*args, **kwargs)
+        self.add_argument('-h', '--help', action='help', default=argparse.SUPPRESS, help='显示帮助信息并退出')
+
+
 def _add_common_runtime_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument('--config', default='config.yaml', help='YAML 配置文件路径')
     parser.add_argument('--headed', action='store_true', help='使用有界面的 Playwright 浏览器模式')
@@ -60,8 +78,8 @@ def _add_service_command(subparsers: argparse._SubParsersAction, name: str, help
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description='autodl-helper：终端 UI 主控制台 + CLI 高级/自动化入口')
-    subparsers = parser.add_subparsers(dest='command')
+    parser = ChineseArgumentParser(description='autodl-helper：终端 UI 主控制台 + CLI 高级/自动化入口')
+    subparsers = parser.add_subparsers(dest='command', parser_class=ChineseArgumentParser)
     subparsers.required = True
 
     init_parser = subparsers.add_parser('init', help='初始化本地 .env 和 config.yaml')
@@ -83,7 +101,7 @@ def build_parser() -> argparse.ArgumentParser:
     list_parser.add_argument('--json', action='store_true', help='输出 JSON 而不是表格')
 
     run_parser = subparsers.add_parser('run', help='运行前台任务')
-    run_subparsers = run_parser.add_subparsers(dest='run_command')
+    run_subparsers = run_parser.add_subparsers(dest='run_command', parser_class=ChineseArgumentParser)
     run_subparsers.required = True
     for name, mode, help_text in (
         ('daemon', 'all', '以前台方式运行 daemon 任务'),
@@ -96,7 +114,7 @@ def build_parser() -> argparse.ArgumentParser:
         _add_runtime_override_args(command_parser)
 
     service_parser = subparsers.add_parser('service', help='管理后台服务')
-    service_subparsers = service_parser.add_subparsers(dest='service_command')
+    service_subparsers = service_parser.add_subparsers(dest='service_command', parser_class=ChineseArgumentParser)
     service_subparsers.required = True
     _add_service_command(service_subparsers, 'install', '安装 run daemon 后台服务')
     _add_service_command(service_subparsers, 'start', '启动已安装的后台服务')
@@ -110,7 +128,7 @@ def build_parser() -> argparse.ArgumentParser:
     _add_path_args(ui_parser)
 
     debug_parser = subparsers.add_parser('debug', help='诊断和排障命令')
-    debug_subparsers = debug_parser.add_subparsers(dest='debug_command')
+    debug_subparsers = debug_parser.add_subparsers(dest='debug_command', parser_class=ChineseArgumentParser)
     debug_subparsers.required = True
 
     health_parser = debug_subparsers.add_parser('health', help='运行本地运行状态检查')
@@ -140,7 +158,7 @@ def build_parser() -> argparse.ArgumentParser:
     history_parser.add_argument('--json', action='store_true', help='输出排障 JSON')
 
     config_parser = subparsers.add_parser('config', help='查看和校验配置')
-    config_subparsers = config_parser.add_subparsers(dest='config_command')
+    config_subparsers = config_parser.add_subparsers(dest='config_command', parser_class=ChineseArgumentParser)
     config_subparsers.required = True
 
     config_show_parser = config_subparsers.add_parser('show', help='显示从文件/env 加载后的配置')

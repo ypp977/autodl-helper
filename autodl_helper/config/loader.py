@@ -203,6 +203,25 @@ def _normalize_lightweight_mode(raw_value: Any) -> str:
     return value or "off"
 
 
+def _parse_bool(raw_value: Any, default: bool, field_name: str) -> bool:
+    if raw_value is None:
+        return default
+    if isinstance(raw_value, bool):
+        return raw_value
+    if isinstance(raw_value, int | float) and not isinstance(raw_value, bool):
+        if raw_value == 1:
+            return True
+        if raw_value == 0:
+            return False
+    if isinstance(raw_value, str):
+        value = raw_value.strip().lower()
+        if value in {"true", "yes", "y", "on", "1"}:
+            return True
+        if value in {"false", "no", "n", "off", "0"}:
+            return False
+    raise ValueError(f"{field_name} must be boolean-like: true/false, yes/no, on/off, 1/0")
+
+
 def _resolve_path(base_dir: Path, raw_value: str, default_name: str) -> str:
     raw_value = str(raw_value or "").strip()
     if not raw_value:
@@ -218,7 +237,7 @@ def _parse_scheduled_job(job: dict[str, Any]) -> ScheduledStartJob:
     selector = ScheduledStartSelector(**selector_payload) if selector_payload else None
     priority = [ScheduledStartPriority(**item) for item in job.get("priority", [])]
     return ScheduledStartJob(
-        enabled=bool(job.get("enabled", True)),
+        enabled=_parse_bool(job.get("enabled", True), True, "tasks.scheduled_start.jobs[].enabled"),
         instance_id=job.get("instance_id", ""),
         name=job.get("name", ""),
         target_time=job.get("target_time", "14:00"),
@@ -261,7 +280,7 @@ def _build_account(
     lightweight_mode_raw = merged.get("lightweight_mode", "off")
     return AccountSettings(
         name=name,
-        enabled=bool(merged.get("enabled", True)),
+        enabled=_parse_bool(merged.get("enabled", True), True, f"accounts.{name}.enabled"),
         authorization=str(authorization or "").strip(),
         autodl_phone=str(phone or "").strip(),
         autodl_password=str(password or "").strip(),
@@ -338,7 +357,7 @@ def load_settings(config_path: str | Path | None = None) -> Settings:
         ),
         tasks=TaskSettings(
             keeper=KeeperSettings(
-                enabled=keeper_payload.get("enabled", True),
+                enabled=_parse_bool(keeper_payload.get("enabled", True), True, "tasks.keeper.enabled"),
                 min_day=int(os.getenv("MIN_DAY", keeper_payload.get("min_day", 7))),
                 shutdown_release_after_hours=int(keeper_payload.get("shutdown_release_after_hours", 360)),
                 keeper_trigger_before_hours=int(keeper_payload.get("keeper_trigger_before_hours", 6)),
@@ -347,25 +366,25 @@ def load_settings(config_path: str | Path | None = None) -> Settings:
                 power_off_wait_seconds=int(keeper_payload.get("power_off_wait_seconds", 5)),
                 start_cooldown_minutes=int(keeper_payload.get("start_cooldown_minutes", 60)),
                 stop_cooldown_minutes=int(keeper_payload.get("stop_cooldown_minutes", 360)),
-                fallback_to_status_at=bool(keeper_payload.get("fallback_to_status_at", True)),
+                fallback_to_status_at=_parse_bool(keeper_payload.get("fallback_to_status_at", True), True, "tasks.keeper.fallback_to_status_at"),
             ),
             scheduled_start=ScheduledStartSettings(
-                enabled=scheduled_payload.get("enabled", False),
+                enabled=_parse_bool(scheduled_payload.get("enabled", False), False, "tasks.scheduled_start.enabled"),
                 poll_interval_seconds=int(scheduled_payload.get("poll_interval_seconds", 300)),
                 jobs=jobs,
             ),
         ),
         notifications=NotificationSettings(
             pushplus=NotificationChannelSettings(
-                enabled=notifications_payload.get("pushplus", {}).get("enabled", False),
+                enabled=_parse_bool(notifications_payload.get("pushplus", {}).get("enabled", False), False, "notifications.pushplus.enabled"),
                 token=os.getenv("PUSHPLUS_TOKEN", notifications_payload.get("pushplus", {}).get("token", "")).strip(),
             ),
             serverchan=NotificationChannelSettings(
-                enabled=notifications_payload.get("serverchan", {}).get("enabled", False),
+                enabled=_parse_bool(notifications_payload.get("serverchan", {}).get("enabled", False), False, "notifications.serverchan.enabled"),
                 token=os.getenv("SERVERCHAN_SENDKEY", notifications_payload.get("serverchan", {}).get("token", "")).strip(),
             ),
             email=EmailSettings(
-                enabled=email_payload.get("enabled", False),
+                enabled=_parse_bool(email_payload.get("enabled", False), False, "notifications.email.enabled"),
                 smtp_host=os.getenv("SMTP_HOST", email_payload.get("smtp_host", "")).strip(),
                 smtp_port=int(os.getenv("SMTP_PORT", email_payload.get("smtp_port", 465))),
                 username=os.getenv("SMTP_USERNAME", email_payload.get("username", "")).strip(),

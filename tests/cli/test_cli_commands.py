@@ -69,6 +69,10 @@ def test_cli_help_positions_ui_and_cli_roles(capsys):
     assert '高级/自动化入口' in captured.out
     assert '启动终端 UI 主控制台' in captured.out
     assert '诊断和排障命令' in captured.out
+    assert '选项' in captured.out
+    assert '显示帮助信息并退出' in captured.out
+    assert 'options:' not in captured.out
+    assert 'show this help message and exit' not in captured.out
 
 
 
@@ -430,6 +434,66 @@ def test_validate_config_rejects_job_with_both_instance_id_and_selector():
     errors = cli.validate_settings(settings)
 
     assert any('exactly one' in err for err in errors)
+
+
+def test_validate_config_rejects_once_job_without_run_date():
+    settings = Settings(
+        auth=AuthSettings(authorization='Bearer token'),
+        tasks=TaskSettings(
+            scheduled_start=ScheduledStartSettings(
+                enabled=True,
+                poll_interval_seconds=5,
+                jobs=[
+                    ScheduledStartJob(
+                        instance_id='iid-1',
+                        name='job-once',
+                        target_time='14:00',
+                        advance_hours=1,
+                        schedule_mode='once',
+                        run_date='',
+                    )
+                ],
+            ),
+        ),
+    )
+
+    errors = cli.validate_settings(settings)
+
+    assert any('run_date' in err and 'required' in err for err in errors)
+
+
+def test_validate_config_rejects_invalid_schedule_mode_and_weekdays():
+    settings = Settings(
+        auth=AuthSettings(authorization='Bearer token'),
+        tasks=TaskSettings(
+            scheduled_start=ScheduledStartSettings(
+                enabled=True,
+                poll_interval_seconds=5,
+                jobs=[
+                    ScheduledStartJob(
+                        instance_id='iid-1',
+                        name='bad-mode',
+                        target_time='14:00',
+                        advance_hours=1,
+                        schedule_mode='monthly',
+                    ),
+                    ScheduledStartJob(
+                        instance_id='iid-2',
+                        name='bad-weekly',
+                        target_time='15:00',
+                        advance_hours=1,
+                        schedule_mode='weekly',
+                        weekdays=[0, 8],
+                    ),
+                ],
+            ),
+        ),
+    )
+
+    errors = cli.validate_settings(settings)
+
+    assert any('schedule_mode' in err for err in errors)
+    assert any('weekdays' in err for err in errors)
 
 
 

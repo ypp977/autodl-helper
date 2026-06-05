@@ -113,3 +113,28 @@ def test_cli_boundary_modules_do_not_grow_business_helpers():
 
     for path in boundary_modules:
         assert _top_level_defs(path) == [], f'{path} should delegate, not carry business helpers'
+
+
+def test_cli_app_keeps_command_implementations_delegated():
+    path = ROOT / 'autodl_helper/cli/app.py'
+    tree = ast.parse(path.read_text(encoding='utf-8'))
+    offenders: list[str] = []
+
+    for node in tree.body:
+        if not isinstance(node, ast.FunctionDef) or not node.name.startswith('_command_'):
+            continue
+        statements = [stmt for stmt in node.body if not isinstance(stmt, ast.Expr) or not isinstance(stmt.value, ast.Constant)]
+        has_impl_return = any(
+            isinstance(stmt, ast.Return)
+            and isinstance(stmt.value, ast.Call)
+            and (
+                isinstance(stmt.value.func, ast.Name)
+                and stmt.value.func.id.endswith('_impl')
+            )
+            for stmt in statements
+        )
+        forbidden_nodes = (ast.For, ast.While, ast.Try, ast.ClassDef, ast.With, ast.AsyncWith)
+        if len(statements) > 2 or not has_impl_return or any(isinstance(child, forbidden_nodes) for child in ast.walk(node)):
+            offenders.append(node.name)
+
+    assert not offenders, 'cli/app.py command wrappers must stay thin delegators: ' + ', '.join(offenders)

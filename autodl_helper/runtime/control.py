@@ -213,6 +213,12 @@ def claim_daemon_launch(
     account: str | None,
     starting_ttl_seconds: int = DAEMON_LAUNCH_STARTING_TTL_SECONDS,
 ) -> dict[str, Any]:
+    atomic_claim = getattr(store, 'claim_daemon_launch_starting', None)
+    if callable(atomic_claim):
+        claimed = bool(atomic_claim(account=account, starting_ttl_seconds=starting_ttl_seconds))
+        status = read_daemon_launch_status(store, starting_ttl_seconds=starting_ttl_seconds)
+        return {**status, 'claimed': claimed}
+
     status = read_daemon_launch_status(store, starting_ttl_seconds=starting_ttl_seconds)
     if status['launch_state'] in {'running', 'fused'}:
         return {**status, 'claimed': False}

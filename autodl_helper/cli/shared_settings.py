@@ -4,6 +4,7 @@ import argparse
 import copy
 import re
 from dataclasses import asdict
+from datetime import date
 from typing import Any, Callable
 
 from autodl_helper.core.auth import resolve_auth_runtime_policy
@@ -124,6 +125,7 @@ def apply_cli_overrides(args: argparse.Namespace, settings: Settings) -> Setting
 
 
 TIME_RE = re.compile(r'^(?:[01]\d|2[0-3]):[0-5]\d$')
+SCHEDULE_MODES = {'daily', 'weekly', 'once'}
 
 
 def validate_settings(
@@ -188,13 +190,23 @@ def validate_settings(
                 errors.append(f'scheduled_start job {label} target_time must be HH:MM.')
             if job.advance_hours <= 0:
                 errors.append(f'scheduled_start job {label} advance_hours must be a positive number.')
+            if job.schedule_mode not in SCHEDULE_MODES:
+                errors.append(f'scheduled_start job {label} schedule_mode must be one of {sorted(SCHEDULE_MODES)}.')
+            if job.schedule_mode == 'once' and not getattr(job, 'run_date', ''):
+                errors.append(f'scheduled_start job {label} run_date required when schedule_mode is once.')
             if job.schedule_mode == 'once' and getattr(job, 'run_date', ''):
                 try:
-                    from datetime import date
-
                     date.fromisoformat(job.run_date)
                 except ValueError:
                     errors.append(f'scheduled_start job {label} run_date must be YYYY-MM-DD.')
+            if job.schedule_mode == 'weekly':
+                weekdays = list(getattr(job, 'weekdays', []) or [])
+                if not weekdays:
+                    errors.append(f'scheduled_start job {label} weekdays must not be empty when schedule_mode is weekly.')
+                for weekday in weekdays:
+                    if int(weekday) < 1 or int(weekday) > 7:
+                        errors.append(f'scheduled_start job {label} weekdays must be integers from 1 to 7.')
+                        break
             if job.selector is not None:
                 if not job.selector.gpu_model:
                     errors.append(f'scheduled_start job {label} selector.gpu_model is required.')
